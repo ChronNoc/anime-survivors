@@ -1496,6 +1496,28 @@ function drawNova(c, n, t) {
   const p = Math.min(1, n.r / n.maxR), big = n.maxR >= 120;
   const fade = n.hold !== undefined ? Math.max(0, n.hold / NOVA_HOLD) : 1;
   const ell = (r, fill) => { c.beginPath(); c.ellipse(n.x, n.y, Math.max(0, r), Math.max(0, r * 0.8), 0, 0, Math.PI * 2); fill ? c.fill() : c.stroke(); };
+  if (n.kind === 'electrodischarge') {
+    // Electrodynamic Discharge: a radial burst of jagged white-cyan lightning, not a flat colored ring
+    c.save(); c.globalCompositeOperation = 'lighter';
+    c.globalAlpha = 0.22 * fade; c.fillStyle = '#5cf2ff'; ell(n.r * 0.7, true);
+    c.globalAlpha = Math.max(0, (0.5 - p)) * fade; c.fillStyle = '#eafffe'; circle(c, n.x, n.y, Math.max(0, 16 * (1 - p * 1.6)));
+    const bolts = 9;
+    for (let i = 0; i < bolts; i++) {
+      const a = i / bolts * Math.PI * 2 + (i % 2 ? 0.18 : -0.18) + t * 0.6, len = n.r * (0.78 + 0.22 * Math.sin(t * 9 + i * 2));
+      c.globalAlpha = (0.85 - i % 3 * 0.08) * fade; c.strokeStyle = i % 2 ? '#ffffff' : '#8ff2ff'; c.lineWidth = i % 3 === 0 ? 2.5 : 1.5;
+      let x = n.x, y = n.y; const steps = 4;
+      c.beginPath(); c.moveTo(x, y);
+      for (let s = 1; s <= steps; s++) {
+        const dist = len * s / steps, jag = (s < steps ? (Math.sin(t * 13 + i * 3 + s) * 5) : 0);
+        x = n.x + Math.cos(a) * dist + Math.cos(a + Math.PI / 2) * jag * (s / steps);
+        y = n.y + Math.sin(a) * dist * 0.82 + Math.sin(a + Math.PI / 2) * jag * (s / steps) * 0.82;
+        c.lineTo(x, y);
+      }
+      c.stroke();
+    }
+    c.restore(); c.globalAlpha = 1;
+    return;
+  }
   if (n.kind === 'rulersauthority') {
     c.save();
     c.globalCompositeOperation = 'lighter';
@@ -4028,6 +4050,37 @@ function renderWorldView(V) {
       c.globalAlpha = 0.55; c.fillStyle = '#6542d9';
       for (let i = 0; i < 6; i++) { const x = -r * (0.4 + i * 0.38), y = Math.sin(p.spin * 0.2 + i) * r * 0.55; circle(c, x, y, 2 + (i % 2)); }
       c.restore();
+    } else if (p.kind === 'lightningneedle') {
+      // Jagged Nen-charged needle: a sharp javelin of crackling electricity, not a round ki ball.
+      // Opaque fill with a dark outline (not pure 'lighter') so it reads crisply against bright grass too.
+      const a = Math.atan2(p.vy, p.vx), r = p.r;
+      c.save(); c.translate(Math.round(p.x), Math.round(p.y)); c.rotate(a);
+      c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.25; c.strokeStyle = '#8ff2ff'; c.lineWidth = r * 1.5;
+      c.beginPath(); c.moveTo(r * 2.4, 0); c.lineTo(-r * 2.2, 0); c.stroke();
+      c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
+      c.fillStyle = '#eafffe'; c.strokeStyle = '#163a44'; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(r * 2.6, 0); c.lineTo(r * 0.3, -r * 0.55); c.lineTo(-r * 1.6, -r * 0.3);
+      c.lineTo(-r * 1.1, 0); c.lineTo(-r * 1.9, r * 0.32); c.lineTo(r * 0.3, r * 0.55); c.closePath(); c.fill(); c.stroke();
+      c.fillStyle = '#5cd8f2'; c.beginPath(); c.moveTo(r * 1.6, 0); c.lineTo(-r * 0.2, -r * 0.22); c.lineTo(-r * 0.9, 0); c.lineTo(-r * 0.2, r * 0.22); c.closePath(); c.fill();
+      c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.85; c.strokeStyle = '#ffffff'; c.lineWidth = 1;
+      for (let i = 0; i < 2; i++) { const j = Math.sin(p.spin * 0.5 + i * 3) * r * 0.5; c.beginPath(); c.moveTo(-r * (1.2 + i), j); c.lineTo(-r * (1.9 + i), -j); c.stroke(); }
+      c.restore();
+    } else if (p.kind === 'thunderyoyo') {
+      // Weighted yo-yo on a Nen thread: spinning disc with a taut string back to the thrower
+      const r = p.r, spin = p.spin * 0.3;
+      if (p.owner) {
+        c.save(); c.globalAlpha = 0.55; c.strokeStyle = '#bdeeff'; c.lineWidth = 1;
+        c.beginPath(); c.moveTo(p.owner.x, p.owner.y - 8); c.lineTo(p.x, p.y); c.stroke(); c.restore();
+      }
+      c.save(); c.translate(Math.round(p.x), Math.round(p.y)); c.rotate(spin);
+      c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.28; c.fillStyle = '#4fd2ff'; circle(c, 0, 0, r * 1.6);
+      c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
+      c.fillStyle = '#1c4a63'; c.strokeStyle = '#0a2430'; c.lineWidth = 1; circle(c, 0, 0, r); c.stroke();
+      c.fillStyle = '#4fd2ff'; circle(c, 0, 0, r * 0.72);
+      c.strokeStyle = '#8ff2ff'; c.lineWidth = 1.5; c.setLineDash([3, 4]); c.lineDashOffset = -p.spin * 0.8;
+      circle(c, 0, 0, r * 0.95, false); c.setLineDash([]);
+      c.fillStyle = '#eafffe'; circle(c, 0, 0, r * 0.3);
+      c.restore();
     } else if (p.kind === 'disc') {
       c.save(); c.translate(Math.round(p.x), Math.round(p.y)); c.rotate(Math.round(p.spin * 2) / 2);
       c.fillStyle = 'rgba(255,216,74,0.45)'; c.beginPath(); c.ellipse(0, 0, p.r + 3, (p.r + 3) * 0.4, 0, 0, Math.PI * 2); c.fill();
@@ -4092,6 +4145,17 @@ function renderWorldView(V) {
     if (d.shadowArmy) { drawShadowSoldier(c, d, G.t); continue; }
     const P = d.owner && G.players.includes(d.owner) ? d.owner : G.players.find(p => p.id === d.ownerId);
     if (!P) continue;
+    if (d.shadowClone) {
+      // Godspeed: Execution - a burst of speed-line streaks trailing behind, not a plain afterimage
+      c.save(); c.globalCompositeOperation = 'lighter';
+      const back = -(d.facing || 1);
+      for (let i = 0; i < 6; i++) {
+        const ly = d.y - 14 + i * 5, len = 20 + (i % 3) * 10, alpha = (0.5 - i * 0.06) * (d.t < 0.6 ? 1 : 0.6);
+        c.globalAlpha = Math.max(0, alpha); c.strokeStyle = i % 2 ? '#eafffe' : '#8ff2ff'; c.lineWidth = i % 3 === 0 ? 2 : 1;
+        c.beginPath(); c.moveTo(d.x, ly); c.lineTo(d.x + back * len, ly); c.stroke();
+      }
+      c.restore(); c.globalAlpha = 1;
+    }
     c.globalAlpha = d.t < 0.6 ? (Math.floor(d.t * 16) % 2 ? 0.28 : 0.75) : (d.shadowClone ? 0.86 : 0.5);
     drawActor(c, P.c.look, d.x, d.y, { facing: d.facing || 1, anim: d.shadowClone ? 'cast' : 'idle', t: G.t * 1.4, noShadow: true, ssj: formKeyFor(P) });
     c.globalAlpha = d.shadowClone ? 0.42 : 0.25; c.strokeStyle = d.shadowClone ? '#eef8ff' : '#c8e0ff'; c.lineWidth = d.shadowClone ? 2 : 1;

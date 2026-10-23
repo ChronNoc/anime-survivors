@@ -13,19 +13,19 @@
 Object.assign(ATTACKS, {
   // ── Killua Zoldyck ──────────────────────────────────────────────────────
   lightningneedle: {
-    name: 'Lightning Needle', color: '#8ff2ff', core: '#eafffe', type: 'projectile', users: ['killua'], crossover: true,
+    name: 'Lightning Needle', color: '#8ff2ff', core: '#eafffe', type: 'projectile', kind: 'lightningneedle', users: ['killua'], crossover: true,
     desc: 'A flick of Nen-charged needles, impossibly fast and precise.',
     stats: l => ({ cd: 1.1 - l * 0.06, dmg: 15 + l * 5, count: 2 + Math.floor(l / 2), speed: 13.5, r: 5 + l * 0.3,
       pierce: 1 + Math.floor(l / 2), life: 0.95, spread: 0.12, knock: 6 }),
   },
   thunderyoyo: {
-    name: 'Thunder Yo-Yo', color: '#4fd2ff', core: '#eafffe', type: 'projectile', kind: 'disc', users: ['killua'], crossover: true,
+    name: 'Thunder Yo-Yo', color: '#4fd2ff', core: '#eafffe', type: 'projectile', kind: 'thunderyoyo', users: ['killua'], crossover: true,
     desc: 'A weighted yo-yo on a Nen thread, arcing back and forth through the crowd.',
     stats: l => ({ cd: 2.0 - l * 0.11, dmg: 24 + l * 9, count: 1, speed: 7.2, r: 9 + l * 0.6,
       pierce: 3 + l, life: 1.8, spread: 0, knock: 10 }),
   },
   electrocharge: {
-    name: 'Electrodynamic Discharge', color: '#5cf2ff', type: 'nova', kind: 'rulersauthority', users: ['killua'], crossover: true,
+    name: 'Electrodynamic Discharge', color: '#5cf2ff', type: 'nova', kind: 'electrodischarge', users: ['killua'], crossover: true,
     desc: 'Floods the ground around him with crackling current, stunning everyone caught in it.',
     stats: l => ({ cd: 4.6 - l * 0.25, dmg: 20 + l * 8, radius: 95 + l * 11, count: 1, stun: 0.3 + l * 0.04 }),
   },
