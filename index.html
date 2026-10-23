@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>DBZ Survivor - Local Crossover Edition</title>
+  <!-- Vista previa al compartir el link (WhatsApp, Discord, Telegram, X...) -->
+  <meta name="description" content="Local crossover survival game with same-keyboard co-op, independent transformations, and moddable fighters.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="DBZ Survivor">
+  <meta property="og:title" content="DBZ Survivor">
+  <meta property="og:description" content="Elige tu guerrero, sobrevive a las oleadas de los 4 niveles y derrota a los jefes. Solo o online con amigos.">
+  <meta property="og:url" content="https://www.dbz-survivor.com/">
+  <meta property="og:image" content="https://www.dbz-survivor.com/og-image.jpg">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:locale" content="es_AR">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://www.dbz-survivor.com/og-image.jpg">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="favicon.png" type="image/png" sizes="64x64">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#18245e">
+  <link rel="stylesheet" href="css/fredoka.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="mods/glassy-ui.css">
+  <!-- Vercel Web Analytics (sin cookies): solo en el sitio publicado, no en local ni en el modo test -->
+  <script>
+    window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    if (location.protocol === 'https:' && !/^(localhost|127\.|\[::1\])/.test(location.hostname) && !/[?&]test\b/.test(location.search)) {
+      const s = document.createElement('script');
+      s.defer = true; s.src = '/_vercel/insights/script.js';
+      document.head.appendChild(s);
+    }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- Menú principal: jugar solo u online y las secciones -->
+  <div id="menu" class="screen">
+    <div class="box menu-box">
+      <!-- Idioma: al cambiarlo la página se recarga (js/i18n.js) -->
+      <div class="lang-toggle" role="group" aria-label="Idioma / Language">
+        <button data-lang="es" title="Español">ES</button><button data-lang="en" title="English">EN</button>
+      </div>
+      <h1 class="logo">DBZ <span>Survivor</span></h1>
+      <p class="edition-badge">LOCAL CROSSOVER EDITION</p>
+      <p class="subtitle">Sobrevive a las oleadas de los 4 niveles y derrota a sus jefes</p>
+      <!-- Cartel que se escribe desde el backoffice (js/telemetry.js) -->
+      <p id="motd" class="motd hidden"></p>
+      <div class="name-row">
+        <label for="nameInput">Tu nombre</label>
+        <input id="nameInput" maxlength="12" placeholder="Guerrero" autocomplete="off">
+      </div>
+      <!-- Escena del menú: tu guerrero frente al jefe final del nivel elegido (se anima en renderMenuHero) -->
+      <canvas id="menuHero" class="menu-hero" width="560" height="190" aria-hidden="true"></canvas>
+      <div class="modes">
+        <div class="mode-row">
+          <button id="btnSolo" class="btn btn-play">Jugar</button>
+          <button id="btnCoop" class="btn btn-play">Co-op local</button>
+        </div>
+        <div class="mode-row">
+          <button id="btnHost" class="btn ghost">Crear sala online</button>
+          <span class="mode-or">o</span>
+          <div class="join">
+            <input id="codeInput" maxlength="5" placeholder="CÓDIGO" autocomplete="off" spellcheck="false">
+            <button id="btnJoin" class="btn ghost small">Unirse</button>
+          </div>
+        </div>
+        <p id="netMsg" class="net-msg"></p>
+        <div class="mode-row shop-row">
+          <button id="btnShop" class="btn shop-btn">Tienda de Zeni</button>
+          <button id="btnTechs" class="btn ghost">Técnicas</button>
+          <button id="btnProfile" class="btn ghost">Perfil</button>
+          <button id="btnAchs" class="btn ghost">Logros</button>
+          <button id="btnRank" class="btn ghost">Ranking</button>
+          <button id="btnHelp" class="btn ghost">Cómo jugar</button>
+        </div>
+      </div>
+      <p class="hint">Solo: WASD / flechas para moverte · Espacio, Shift o E para el poder del Ki<br>Co-op local: J1 usa WASD + Espacio/E · J2 usa flechas + Ctrl derecho · M mapa · N música · B sonidos · P pausa</p>
+      <p class="zeni"><i class="coin"></i>Zeni: <b id="zeniTotal">0</b></p>
+      <p class="footer">
+        <span class="version"></span> ·
+        <span>Local Crossover Edition</span>
+        <button id="btnNews" class="link-btn news-link hidden">Novedades</button>
+        <a class="author-link hidden" aria-hidden="true"></a>
+        <button id="btnCredits" class="link-btn hidden" aria-hidden="true">Créditos</button>
+        <button id="btnReport" class="link-btn hidden" aria-hidden="true">Reportar un problema</button>
+      </p>
+    </div>
+  </div>
+
+  <!-- Antes de jugar solo: nivel, guerrero, apuntado y velocidad -->
+  <div id="setup" class="screen overlay hidden">
+    <div class="box setup-box">
+      <h2>Prepara tu partida</h2>
+      <h3 class="pick">Elige el nivel</h3>
+      <div id="levelList" class="level-list"></div>
+      <h3 class="pick">Elige a tu guerrero</h3>
+      <p id="setupCharNote" class="hint wk-note hidden"></p>
+      <div id="charList" class="char-list"></div>
+      <p id="charDetail" class="char-detail"></p>
+      <div id="coopSetup" class="coop-setup hidden">
+        <h3 class="pick">Jugador 2</h3>
+        <label for="coopChar2">Guerrero:</label>
+        <select id="coopChar2"></select>
+        <p class="hint"><b>Jugador 1:</b> WASD · Ki: Espacio/E<br><b>Jugador 2:</b> Flechas · Ki: Ctrl derecho (RCTRL)</p>
+      </div>
+      <!-- Barra fija de abajo: opciones de la partida y los botones, siempre a la vista -->
+      <div class="setup-foot">
+      <div class="setup-opts">
+        <div class="aim-pick" role="group" aria-label="Apuntado">
+          <span>Apuntado:</span>
+          <button id="aimAuto" class="aim-btn">⚙️ Automático <small>al enemigo más cercano</small></button>
+          <button id="aimManual" class="aim-btn">🎯 Manual <small>PC: hacia el mouse · mando: con la palanca derecha · celular: hacia donde te mueves</small></button>
+        </div>
+        <label class="opt-speed"><input type="checkbox" id="optSpeed"> Velocidad x1.5 <small>(todo el juego va un 50% más rápido)</small></label>
+      </div>
+      <div class="setup-actions">
+        <button id="btnSetupBack" class="btn ghost">Volver</button>
+        <button id="btnSetupGo" class="btn">Jugar</button>
+      </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cómo jugar -->
+  <div id="help" class="screen overlay hidden">
+    <div class="box help-box">
+      <h2>Cómo jugar</h2>
+      <div id="helpContent" class="help-content"></div>
+      <button id="btnHelpBack" class="btn ghost">Volver</button>
+    </div>
+  </div>
+
+  <!-- Técnicas de cada guerrero -->
+  <div id="techs" class="screen overlay hidden">
+    <div class="box help-box">
+      <h2>Técnicas</h2>
+      <div id="techsContent" class="help-content"></div>
+      <button id="btnTechsBack" class="btn ghost">Volver</button>
+    </div>
+  </div>
+
+  <!-- Logros -->
+  <div id="achs" class="screen overlay hidden">
+    <div class="box help-box">
+      <h2>Logros</h2>
+      <div id="achsContent" class="help-content"></div>
+      <button id="btnAchsBack" class="btn ghost">Volver</button>
+    </div>
+  </div>
+
+  <!-- Ranking global por nivel -->
+  <div id="rank" class="screen overlay hidden">
+    <div class="box help-box">
+      <h2>Ranking</h2>
+      <div id="rankContent" class="help-content"></div>
+      <button id="btnRankBack" class="btn ghost">Volver</button>
+    </div>
+  </div>
+
+  <!-- Novedades: cambios de cada versión (salen de CHANGELOG.md) -->
+  <div id="news" class="screen overlay hidden">
+    <div class="box help-box">
+      <h2>Novedades</h2>
+      <div id="newsContent" class="help-content news-content"></div>
+      <button id="btnNewsBack" class="btn ghost">Volver</button>
+    </div>
+  </div>
+
+  <!-- Modo mantenimiento (se activa desde el backoffice): tapa todo y no deja jugar -->
+  <div id="maint" class="screen maint hidden">
+    <div class="box maint-box">
+      <div class="maint-icon">🔧</div>
+      <h2>El juego está en mantenimiento</h2>
+      <p id="maintText"></p>
+      <button class="btn ghost" onclick="location.reload()">Reintentar</button>
+    </div>
+  </div>
+  <p id="maintTest" class="maint-test hidden">🔧 Mantenimiento activo · el modo prueba puede jugar igual</p>
+
+  <!-- Aviso de reinicio general del progreso (backoffice) -->
+  <div id="resetNotice" class="screen overlay hidden">
+    <div class="box maint-box">
+      <div class="maint-icon">🔄</div>
+      <h2>¡Empezamos de cero!</h2>
+      <p>Se reinició el progreso de todos los jugadores: el Zeni, las mejoras, los logros y los guerreros desbloqueados volvieron al inicio. Todos arrancan igual. ¡Suerte!</p>
+      <button id="btnResetOk" class="btn">¡A jugar!</button>
+    </div>
+  </div>
+
+  <!-- Reportar un problema (llega al backoffice) -->
+  <div id="report" class="screen overlay hidden">
+    <div class="box report-box">
+      <h2>Reportar un problema</h2>
+      <p class="hint">Cuéntanos qué pasó: qué estabas haciendo, en qué nivel y con qué guerrero. Nos ayuda a arreglarlo.</p>
+      <textarea id="reportText" maxlength="1000" rows="6" placeholder="Por ejemplo: en el Nivel 3, al aparecer Cell el juego se trabó..."></textarea>
+      <p id="reportMsg" class="hint"></p>
+      <div class="setup-actions">
+        <button id="btnReportCancel" class="btn ghost">Volver</button>
+        <button id="btnReportSend" class="btn">Enviar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Perfil del jugador (js/profile.js) -->
+  <div id="profile" class="screen overlay hidden">
+    <div class="box help-box">
+      <h2>Perfil</h2>
+      <div id="profileContent" class="help-content"></div>
+      <button id="btnProfileBack" class="btn ghost">Volver</button>
+    </div>
+  </div>
+
+  <!-- Local build information (kept in the DOM for compatibility with the original menu code) -->
+  <div id="credits" class="screen overlay hidden">
+    <div class="box credits-box">
+      <h2>Local Crossover Edition</h2>
+      <p>Private local build with same-keyboard co-op and crossover fighters.</p>
+      <button id="btnCreditsBack" class="btn ghost">Volver</button>
+    </div>
+  </div>
+
+  <!-- Tienda de Zeni -->
+  <div id="shop" class="screen overlay hidden">
+    <div class="box shop-box">
+      <h2>Tienda de Zeni</h2>
+      <p class="hint">Mejoras permanentes para todos tus guerreros, también en las partidas online</p>
+      <p class="shop-zeni"><i class="coin"></i>Tienes <b id="shopZeni">0</b> Zeni</p>
+      <div id="shopList" class="shop-list"></div>
+      <div class="shop-actions">
+        <button id="btnShopBack" class="btn ghost">Volver</button>
+        <button id="btnShopReset" class="btn danger">Reiniciar mejoras</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sala online -->
+  <div id="lobby" class="screen overlay hidden">
+    <div class="box lobby-box">
+      <h2>Sala <span id="roomCode" class="room-code"></span></h2>
+      <p class="hint">Comparte el código o el enlace con tus amigos (hasta 4 jugadores)</p>
+      <button id="btnCopy" class="btn ghost small">Copiar enlace</button>
+      <div id="lobbyPlayers" class="lobby-players"></div>
+      <h3>Tu guerrero</h3>
+      <div id="lobbyChars" class="lobby-chars"></div>
+      <select id="lobbyLevel" class="lobby-level" title="Nivel de la partida"></select>
+      <p id="lobbyLevelInfo" class="hint"></p>
+      <label id="lobbySpeedOpt" class="opt-speed"><input type="checkbox" id="lobbySpeed"> Velocidad x1.5</label>
+      <label class="opt-speed"><input type="checkbox" id="lobbyAim"> Apuntar manualmente <small>(PC: hacia el mouse)</small></label>
+      <p id="lobbySpeedInfo" class="hint"></p>
+      <button id="btnStart" class="btn">Comenzar partida</button>
+      <p id="lobbyWait" class="hint">Esperando a que el anfitrión comience la partida...</p>
+      <button id="btnLeave" class="btn ghost">Salir de la sala</button>
+    </div>
+  </div>
+
+  <!-- Subida de nivel -->
+  <div id="levelup" class="screen overlay hidden">
+    <h2 id="levelupTitle">¡Tu poder aumenta!</h2>
+    <div class="lvl-row">
+      <div id="comboLvl" class="combo-wrap"></div>
+      <div id="choices" class="choices"></div>
+    </div>
+  </div>
+
+  <!-- Pausa -->
+  <div id="pause" class="screen overlay hidden">
+    <div class="box pause-box">
+      <h2 id="pauseTitle">Pausa</h2>
+      <p id="pauseNote" class="hint"></p>
+      <div class="pause-cols">
+        <div id="pauseStats" class="pause-stats"></div>
+        <div class="pause-map">
+          <!-- Pestañas: el mapa o el cuadro de mejoras y combinaciones (js/combos.js) -->
+          <div class="pause-tabs">
+            <button id="tabMap" class="btn small ghost" data-tab="map">Mapa</button>
+            <button id="tabCombos" class="btn small ghost" data-tab="combos">Mejoras</button>
+          </div>
+          <div id="pauseCombos" class="combo-wrap"></div>
+          <canvas id="mapCanvas" width="300" height="300"></canvas>
+          <div class="map-legend">
+            <span><i style="background:#ffe27a"></i>Tú</span>
+            <span><i style="background:#7fd8ff"></i>Compañeros</span>
+            <span><i style="background:#ff4d4d"></i>Enemigos</span>
+            <span><i class="big" style="background:#ff3d5c"></i>Jefe</span>
+            <span><i style="background:#ffcc33;box-shadow:0 0 0 2px rgba(255,204,51,.45)"></i>Élite (lleva una esfera)</span>
+            <span><img class="legend-ball" src="favicon.png" alt="">Esfera del Dragón</span>
+            <span><i style="background:#6cff7a"></i>Semilla</span>
+            <span><i style="background:#8fd8ff"></i>Cápsula de Bulma</span>
+          </div>
+          <!-- Opciones y botones van debajo del mapa para que la pausa entre sin desplazarse
+               (el apuntado y la velocidad se eligen antes de empezar, no acá) -->
+          <div class="pause-opts">
+            <h3>Opciones</h3>
+            <label class="vol-row">🎵 Música <input type="range" id="volMusic" min="0" max="100" step="5"><span id="volMusicVal"></span></label>
+            <label class="vol-row">🔊 Efectos <input type="range" id="volSfx" min="0" max="100" step="5"><span id="volSfxVal"></span></label>
+          </div>
+          <div class="pause-actions">
+            <button id="btnResume" class="btn">Continuar</button>
+            <button id="btnRestart" class="btn ghost">Reiniciar</button>
+            <button id="btnQuit" class="btn danger">Abandonar</button>
+            <button id="btnFullscreen" class="btn ghost hidden">Pantalla completa</button>
+          </div>
+          <button id="btnReportPause" class="link-btn report-link">Reportar un problema</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fin de la partida -->
+  <div id="gameover" class="screen overlay hidden">
+    <div class="box small-box go-box">
+      <p id="goBadge" class="go-badge"></p>
+      <h2 id="goTitle">Has caído...</h2>
+      <figure id="goQuote" class="go-quote"></figure>
+      <div id="goStats" class="stats"></div>
+      <div id="goRank" class="go-rank"></div>
+      <div id="goDetail" class="go-detail pause-stats"></div>
+      <button id="btnRetry" class="btn">Reintentar</button>
+      <button id="btnMenu" class="btn ghost">Menú</button>
+    </div>
+  </div>
+
+  <!-- Cartel al conseguir un logro -->
+  <div id="achToasts" class="ach-toasts" role="status" aria-live="polite"></div>
+
+  <!-- Contraseña del modo prueba (?test en el enlace) -->
+  <div id="testLogin" class="screen overlay hidden">
+    <div class="box small-box">
+      <h2>Modo prueba</h2>
+      <p class="hint">Ingresa la contraseña para activar el modo prueba.</p>
+      <input id="testPass" type="password" autocomplete="off" placeholder="Contraseña">
+      <p id="testError" class="net-msg"></p>
+      <div class="mode-row">
+        <button id="btnTestOk" class="btn">Entrar</button>
+        <button id="btnTestCancel" class="btn ghost">Jugar normal</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modo prueba (?test en el enlace) -->
+  <div id="testBadge" class="test-badge hidden">
+    <b>MODO PRUEBA</b> · todos los personajes · no se guarda nada
+    <span class="test-keys">· F1 nivel · F2 Ki · F3 jefe · F4 esfera · F5 técnicas a nivel 5 · F6 poderes · F8 inmortal · F9 tiempo x5 · F10 sin enemigos</span>
+    <!-- Zeni de prueba (solo en el menú; como el modo prueba no guarda, dura hasta recargar) -->
+    <button id="btnTestZeni" class="test-zeni">+1000 Zeni</button>
+    <!-- En la partida: interruptores (también F8, F9 y F10) -->
+    <button class="test-tog" data-test="god">Inmortal</button><button class="test-tog" data-test="fast">Tiempo x5</button><button class="test-tog" data-test="noSpawn">Sin enemigos</button><button class="test-tog" id="btnTestPowers">Poderes</button>
+  </div>
+  <!-- Modo prueba: panel de Poderes (F6) para aprender cualquier técnica o mejora en la partida -->
+  <div id="testPowers" class="screen overlay hidden">
+    <div class="box tp-box">
+      <h2>Poderes <small>(modo prueba)</small></h2>
+      <p class="hint">+ aprende o sube de nivel · − baja o quita. Sirven todas, aunque no sean del guerrero.</p>
+      <div id="tpContent" class="tp-content"></div>
+      <button id="tpClose" class="btn">Cerrar (F6)</button>
+    </div>
+  </div>
+
+  <!-- Aviso de versión nueva (js/update.js) -->
+  <div id="updateBanner" class="update-banner hidden" role="status">
+    <span id="updateText"></span>
+    <button id="btnUpdate" class="btn small">Actualizar</button>
+    <button id="btnUpdateClose" class="link-btn" title="Ahora no">✕</button>
+  </div>
+
+  <button id="btnTransform" class="btn-ki hidden">¡KI!</button>
+  <button id="btnPause" class="btn-pause">II</button>
+  <button id="btnMap" class="btn-pause btn-map" title="Mostrar u ocultar el mapa (M)">▦</button>
+  <button id="btnMusic" class="btn-music" title="Silenciar música (N)">♪</button>
+  <button id="btnSfx" class="btn-music btn-sfx" title="Silenciar efectos de sonido (B)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7h3l5-4v14l-5-4H3z" fill="currentColor"/><path d="M13.5 6.5a5 5 0 0 1 0 7M15.8 4.2a8.2 8.2 0 0 1 0 11.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+
+  <script src="js/i18n.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/lang-en.js"></script>
+  <!-- Local mod hooks: edit mods/config.js to change balance/unlocks. -->
+  <script src="mods/anime-crossover.js"></script>
+  <script src="mods/new-heroes.js"></script>
+  <script src="mods/config.js"></script>
+  <script src="mods/apply-mods.js"></script>
+  <script src="js/sprites.js"></script>
+  <script src="js/custom-sprites.js"></script>
+  <script src="js/draw.js"></script>
+  <script src="js/maps.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="vendor/peerjs.min.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/weekly.js"></script>
+  <script src="js/bonus.js"></script>
+  <script src="js/help.js"></script>
+  <script src="js/profile.js"></script>
+  <script src="js/replays.js"></script>
+  <script src="js/combos.js"></script>
+  <script src="js/ranking.js"></script>
+  <script src="js/news.js"></script>
+  <script src="js/net.js"></script>
+  <script src="js/update.js"></script>
+  <script src="js/telemetry.js"></script>
+</body>
+</html>

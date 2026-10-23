@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <radialGradient id="ball" cx="38%" cy="34%" r="70%">
+      <stop offset="0" stop-color="#fff3c4"/>
+      <stop offset="0.3" stop-color="#ffc233"/>
+      <stop offset="0.75" stop-color="#f08a00"/>
+      <stop offset="1" stop-color="#c25a00"/>
+    </radialGradient>
+    <path id="star" d="M0,-7 L1.9,-2.4 L6.7,-2.2 L3,1 L4.1,5.7 L0,3.1 L-4.1,5.7 L-3,1 L-6.7,-2.2 L-1.9,-2.4 Z" fill="#d4151b"/>
+  </defs>
+  <circle cx="32" cy="32" r="30" fill="#5a2a00"/>
+  <circle cx="32" cy="32" r="28" fill="url(#ball)"/>
+  <use href="#star" x="24" y="24"/>
+  <use href="#star" x="40" y="24"/>
+  <use href="#star" x="24" y="40"/>
+  <use href="#star" x="40" y="40"/>
+  <ellipse cx="21" cy="15" rx="7" ry="4" fill="#fffbe6" opacity="0.85" transform="rotate(-30 21 15)"/>
+</svg>
