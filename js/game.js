@@ -801,8 +801,13 @@ function viewer() {
   const M = G.me;
   if (M && M.hidden && G.fusion) return G.players.find(p => p.id === G.fusion.driverId) || M;
   if (G.localCoop) {
-    const local = G.players.filter(p => !p.gone && !p.hidden);
+    // A downed teammate must not anchor the shared camera: once they're dead, the living
+    // player(s) get full, unconstrained camera movement again (only revive-eligible, moving
+    // players count toward the average).
+    const alive = G.players.filter(p => !p.gone && !p.hidden && !p.dead);
+    const local = alive.length ? alive : G.players.filter(p => !p.gone && !p.hidden);
     if (local.length > 1) return { ...M, x: local.reduce((n, p) => n + p.x, 0) / local.length, y: local.reduce((n, p) => n + p.y, 0) / local.length };
+    if (local.length === 1) return local[0];
   }
   return M;
 }
@@ -1065,8 +1070,13 @@ function killEnemy(e, owner) {
   // Local mod: common enemies use the configurable rate, elites are generous,
   // and every boss leaves a healing bean. Luck still improves non-boss drops.
   const senzuChance = e.boss ? 1 : e.elite ? Math.max(0.35, SENZU_DROP * 3) : SENZU_DROP;
-  if (!rule('nosenzu') && Math.random() < Math.min(1, senzuChance * (e.boss ? 1 : luck)))
-    G.pickups.push({ kind: 'senzu', x: sx, y: sy, pulled: false, sp: 0 });
+  if (!rule('nosenzu') && Math.random() < Math.min(1, senzuChance * (e.boss ? 1 : luck))) {
+    // The higher drop rate means beans can pile up if nobody's low on HP; despawn (born+SENZU_LIFE)
+    // and a soft on-ground cap keep the floor from filling up without ever lowering the drop rate itself.
+    const onGround = G.pickups.filter(p => p.kind === 'senzu');
+    if (onGround.length >= SENZU_CAP) { let oldest = onGround[0]; for (const p of onGround) if ((p.born || 0) < (oldest.born || 0)) oldest = p; oldest.dead = true; }
+    G.pickups.push({ kind: 'senzu', x: sx, y: sy, pulled: false, sp: 0, born: G.t });
+  }
   // Cápsula de Bulma: rara (más probable en los de élite) y nunca dos en el suelo a la vez
   if (Math.random() < (e.elite ? 0.35 : CAPSULE_DROP * luck) && !G.pickups.some(p => p.kind === 'capsule')) G.pickups.push({ kind: 'capsule', x: sx, y: sy, pulled: false, sp: 0 });
   if (e.elite || (e.boss && !e.final)) G.pickups.push({ kind: 'ball', x: sx, y: sy, pulled: false, sp: 0 });
@@ -1548,6 +1558,12 @@ function enemyShot(e, ang, speed = 3.5, r = 5, color = 0) {
 // It is clamped to 0..1; the original game's 0.8% remains the fallback.
 const configuredSenzuDrop = Number(window.DBZ_MOD_CONFIG && window.DBZ_MOD_CONFIG.senzuDropRate);
 const SENZU_DROP = Number.isFinite(configuredSenzuDrop) ? Math.max(0, Math.min(1, configuredSenzuDrop)) : 0.008;
+// At the higher drop rate, uncollected beans need somewhere to go: a soft on-ground cap (oldest one
+// disappears to make room for a new drop) plus a despawn timer if nobody needed one for a while.
+// Configurable the same way as the drop rate itself - raising it never silently lowers senzuDropRate.
+const configuredSenzuCap = Number(window.DBZ_MOD_CONFIG && window.DBZ_MOD_CONFIG.senzuOnGroundCap);
+const SENZU_CAP = Number.isFinite(configuredSenzuCap) && configuredSenzuCap > 0 ? Math.floor(configuredSenzuCap) : 14;
+const SENZU_LIFE = 55;   // seconds an uncollected bean sits on the ground before it despawns
 const CAPSULE_DROP = 0.012;
 const ULTIMATE_DROP = 0.006;   // Ultimate Orb: rare per-run pickup, never a permanent unlock
 // The one ATTACKS entry (if any) flagged ultimate:true that this character's users list includes.
@@ -2068,6 +2084,7 @@ function tickLanes(dt) {
 function updatePickups(k) {
   if (!alivePlayers().length) return;
   for (const p of G.pickups) {
+    if (p.kind === 'senzu' && !p.pulled && p.born !== undefined && G.t - p.born > SENZU_LIFE) { p.dead = true; continue; }   // se echó a perder sin que nadie la agarrara
     // Las gemas atraídas por la Cápsula de Bulma van hacia quien la recogió, acelerando de a poco
     const owner = p.to !== undefined && G.players.find(o => o.id === p.to && !o.dead && !o.gone && !o.hidden);
     const P = owner || nearestPlayer(p.x, p.y);
@@ -4098,6 +4115,7 @@ function render() {
   drawVignette(M.transformed > 0 ? M.c.aura : null);
   drawSplitDivider();
   drawNames();
+  drawTeammateIndicators();
   drawTexts();
   drawHUD();
   drawSummon();
@@ -4328,7 +4346,7 @@ function drawNames() {
         const [x, y] = splitScreenPoint(P.x, P.y - (P.halo ? 47 : 40), view);
         if (x < view.x - 30 || x > view.x + view.w + 30 || y < view.y - 30 || y > view.y + view.h + 30) return;
         const fused = isFusedBody(P);
-        let name = P.dead ? t('{name} (caído)', { name: P.name }) : P.name;
+        let name = P.netDisconnected ? t('{name} (reconectando...)', { name: P.name }) : P.dead ? t('{name} (caído)', { name: P.name }) : P.name;
         if (fused) name = `Gogeta (${F.ids.map(id => G.players.find(p => p.id === id)).filter(p => p && !p.ally).map(p => p.name).join(' + ')})`;
         hudText(name, x, y, 11, fused ? '#ffe14d' : PLAYER_COLORS[i % 4], 'center');
         const secs = fused ? F.t : P.transformed;
@@ -4343,7 +4361,7 @@ function drawNames() {
     const [x, y] = toScreen(P.x, P.y - (P.halo ? 47 : 40)), fused = isFusedBody(P);   // con aureola, el nombre va más arriba
     // Nombre (solo si hay más de un jugador real) y cuenta regresiva del poder activo
     if (G.players.filter(p => !p.ally).length > 1) {
-      let name = P.dead ? t('{name} (caído)', { name: P.name }) : P.name;
+      let name = P.netDisconnected ? t('{name} (reconectando...)', { name: P.name }) : P.dead ? t('{name} (caído)', { name: P.name }) : P.name;
       if (fused) name = `Gogeta (${F.ids.map(id => G.players.find(p => p.id === id)).filter(p => p && !p.ally).map(p => p.name).join(' + ')})`;
       hudText(name, x, y, 12, fused ? '#ffe14d' : PLAYER_COLORS[i % 4], 'center');
     }
@@ -4634,6 +4652,59 @@ function emptySlot(x, y, s) {
   ctx.fillStyle = 'rgba(10,15,46,0.35)'; ctx.fillRect(x, y, s, s);
   ctx.strokeStyle = 'rgba(155,184,255,0.3)'; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, s - 1, s - 1);
 }
+// Off-screen teammate indicators: for any other real player (local co-op or online) who isn't
+// currently visible on your screen/view, show a direction arrow at the edge with distance and a
+// health-condition color (green/yellow/red), or a "down" label if they need reviving. Works the
+// same in shared-camera and split-screen modes.
+function drawTeammateIndicators() {
+  const real = G.players.filter(p => !p.ally && !p.gone);
+  if (real.length < 2) return;
+  const drawFor = (me, view) => {
+    for (const P of real) {
+      if (P === me || P.hidden) continue;
+      const rectX = view ? view.x : 0, rectY = view ? view.y : 0, rectW = view ? view.w : W, rectH = view ? view.h : H;
+      const [sx, sy] = view ? splitScreenPoint(P.x, P.y, view) : toScreen(P.x, P.y);
+      const margin = 30;
+      if (sx > rectX - margin && sx < rectX + rectW + margin && sy > rectY - margin && sy < rectY + rectH + margin) continue;   // on screen already
+      const cx = rectX + rectW / 2, cy = rectY + rectH / 2;
+      const a = Math.atan2(sy - cy, sx - cx), r = Math.min(rectW, rectH) / 2 - 34;
+      const ax = cx + Math.cos(a) * r, ay = cy + Math.sin(a) * r;
+      const down = !!P.dead, hpPct = P.maxHp ? Math.max(0, P.hp) / P.maxHp : 1;
+      const color = down ? '#9aa0c0' : hpPct < 0.3 ? '#ff4d4d' : hpPct < 0.65 ? '#ffd93b' : '#6cff7a';
+      ctx.save(); ctx.beginPath(); ctx.rect(rectX, rectY, rectW, rectH); ctx.clip();
+      ctx.translate(Math.round(ax), Math.round(ay)); ctx.rotate(a);
+      ctx.globalAlpha = down ? 0.55 + 0.25 * Math.sin(G.t * 6) : 1;   // downed teammate's arrow pulses: come revive them
+      ctx.fillStyle = '#0a0f2e'; poly(ctx, [13, 0, -9, -10, -9, 10], 0, 0);
+      ctx.fillStyle = color; poly(ctx, [10, 0, -6, -7, -6, 7], 0, 0);
+      ctx.globalAlpha = 1; ctx.rotate(-a); ctx.translate(-Math.round(ax), -Math.round(ay));
+      const dist = Math.hypot(P.x - me.x, P.y - me.y);
+      hudText(down ? t('Caído') : `${Math.round(dist / METERS)}m`, ax, ay + (Math.sin(a) > 0 ? -12 : 20), 10, color, 'center');
+      ctx.restore();
+    }
+  };
+  if (splitLayout) for (const view of splitLayout.views) drawFor(view.player, view);
+  else drawFor(G.me, null);
+}
+// Small, always-on connection indicator during an online match: real round-trip ping (color-coded),
+// direct vs. relayed path, how many peers are connected, and a reconnecting state when applicable.
+function drawNetBadge() {
+  const reconnecting = Net.reconnecting;
+  const x = W - 10, y = 78;
+  const ping = Net.ping, path = Net.path, peers = Net.peerCount;
+  const pingColor = ping < 0 ? '#999' : ping < 120 ? '#6cff7a' : ping < 260 ? '#ffd93b' : '#ff6a6a';
+  ctx.save();
+  if (reconnecting) {
+    const pulse = 0.6 + 0.4 * Math.sin(G.t * 8);
+    ctx.globalAlpha = pulse;
+    hudText(t('Reconectando...'), x, y, 13, '#ff9b3d', 'right');
+  } else {
+    const pingTxt = ping < 0 ? '...' : `${ping}ms`;
+    const pathTxt = path === 'relay' ? t('(por intermediario)') : path === 'direct' ? t('(directo)') : '';
+    hudText(`🌐 ${pingTxt} ${pathTxt}`.trim(), x, y, 11, pingColor, 'right');
+    if (G.net.role === 'host') hudText(t('{n} conectados', { n: peers }), x, y + 13, 10, '#8fb0ff', 'right');
+  }
+  ctx.restore();
+}
 function edgeArrow(dx, dy, color) {
   const a = Math.atan2(dy, dx), r = Math.min(W, H) / 2 - 40;
   ctx.save(); ctx.translate(W / 2 + Math.cos(a) * r, H / 2 + Math.sin(a) * r); ctx.rotate(a);
@@ -4697,6 +4768,7 @@ function drawHUD() {
   if (!G.snake) drawBossPointers();   // debajo de los paneles del HUD
   // Online: hace un rato que no llega nada del anfitrión
   if (G.net && G.net.role === 'client' && Net.lag > 2000) hudText(t('Conexión lenta con el anfitrión...'), W / 2, Math.min(150, H * 0.3), 15, '#ffb0a0', 'center');
+  if (G.net) drawNetBadge();
   const P = G.me, compact = W < 640;
   // Barra de experiencia superior
   pbar(2, 2, W - 4, 6, G.xp / G.xpNext, '#3da5ff', '#b8e4ff');

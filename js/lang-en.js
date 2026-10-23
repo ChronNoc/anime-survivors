@@ -574,6 +574,13 @@ EN_TEXT = {
 
   // ── HUD ──
   '{name} (caído)': '{name} (down)',
+  '{name} (reconectando...)': '{name} (reconnecting...)',
+  'Reconectando con el anfitrión... ({n})': 'Reconnecting to host... ({n})',
+  '{name} se reconectó': '{name} reconnected',
+  'Reconectando...': 'Reconnecting...',
+  '(por intermediario)': '(relayed)',
+  '(directo)': '(direct)',
+  '{n} conectados': '{n} connected',
   'Caído': 'Down',
   'Toca ¡KI!': 'Tap KI!',
   'Espacio': 'Space',

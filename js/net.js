@@ -9,12 +9,31 @@ const Net = (() => {
   const MAX_PLAYERS = 4;
   const SNAP_RATE = 1 / 15, POS_RATE = 1 / 20;
   const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  // Self-hostable networking config - no secrets live in this file. Override from the page (before
+  // net.js loads) or via mods/config.js with: window.DBZ_NET_CONFIG = { iceServers: [...], host, port,
+  // path, secure, key }. With nothing set, this falls back to PeerJS's free public broker + Google's
+  // public STUN servers, which cannot traverse every NAT (notably symmetric NAT on both sides) - see
+  // README "Online play" for how to point this at your own PeerJS/coturn TURN server instead.
+  const NET_CFG = (typeof window !== 'undefined' && window.DBZ_NET_CONFIG) || {};
+  const DEFAULT_ICE = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }];
+  function peerOptions(extra) {
+    const opts = Object.assign({}, extra);
+    const ice = NET_CFG.iceServers || DEFAULT_ICE;
+    opts.config = { iceServers: ice };
+    for (const k of ['host', 'port', 'path', 'secure', 'key']) if (NET_CFG[k] !== undefined) opts[k] = NET_CFG[k];
+    return opts;
+  }
 
   let peer = null, role = null, code = '', myId = 0, inGame = false, nextId = 1, retries = 0;
   let roster = [];                 // [{ id, name, charId }]
   const conns = new Map();         // anfitrión: id → conexión
   let hostConn = null;             // cliente: conexión con el anfitrión
   let snapAcc = 0, posAcc = 0, lastSnap = 0, roomSpeed = 1, roomLevel = 'saiyan';
+  // Indicador de conexión visible (ping real ida y vuelta, no solo "hace cuánto llegó la última
+  // instantánea"): cada lado manda un 'ping' cada 2 s y el otro lo devuelve tal cual como 'pong'.
+  const PING_RATE = 2000;
+  let pingAcc = 0, myRtt = -1;         // cliente: ida y vuelta con el anfitrión
+  const hostRtt = new Map();           // anfitrión: ida y vuelta con cada invitado (id → ms)
   const HOST_TIMEOUT = 15000, CLIENT_TIMEOUT = 15000; // ms sin noticias para dar por caída la conexión (2.23.2: antes 8 y 10 s)
   // Si a un invitado se le acumulan más de MAX_QUEUE bytes sin enviar, el anfitrión saltea instantáneas hasta que se
   // vacíe: si no, en una conexión lenta (p. ej. por el servidor intermediario TURN) la cola crecía minuto a minuto y a
@@ -23,6 +42,12 @@ const Net = (() => {
   // Avisos de una conexión que no la cortan (el mensaje no salió, pero la conexión sigue bien)
   const SOFT_ERRORS = ['message-too-big'];
   let chunks = [];   // (invitado) las partes de un mensaje grande que van llegando
+  // Reconexión ante un corte breve (wifi, cambio de red, pestaña suspendida): el personaje, la vida, las
+  // técnicas y la posición se conservan durante una pequeña ventana en vez de perderse al instante.
+  const RECONNECT_GRACE = 25000;   // ms que un jugador caído puede volver sin perder su lugar
+  let reconnectState = null;       // null | 'host' (cliente intentando reconectar) | 'guest:<name>' (anfitrión esperando)
+  const pendingRejoin = new Map(); // anfitrión: id → { name, charId, deadline }
+  let myReconnectKey = null;       // cliente: { code, id } guardado para poder reclamar su lugar
   // Errores de la conexión con el servidor de PeerJS (solo sirve para encontrarse al crear o unirse a una sala): NO
   // afectan a la conexión directa entre los jugadores. Antes cualquier error cerraba todo y las partidas online se
   // cortaban para todos a los 5-7 minutos, cuando el servidor cortaba su conexión (registro del 21/10/2026). Ahora se
@@ -85,7 +110,7 @@ const Net = (() => {
     cleanup();
     role = 'host'; code = genCode(); myId = 0;
     setMsg(t('Creando sala...'));
-    peer = new Peer(PREFIX + code);
+    peer = new Peer(PREFIX + code, peerOptions());
     peer.on('open', () => {
       retries = 0;
       roster = [{ id: 0, name: myName(), charId: myChar(), perks: myPerks(), ver: GAME_VERSION }];
@@ -93,17 +118,16 @@ const Net = (() => {
       showLobby();
     });
     peer.on('connection', conn => {
-      conn.on('open', () => {
-        if (inGame || roster.length >= MAX_PLAYERS) {
-          conn.send({ t: 'full', inGame });
-          setTimeout(() => conn.close(), 500);
-          return;
-        }
-        conn._pid = nextId++;
-        conns.set(conn._pid, conn);
-        conn.send({ t: 'welcome', id: conn._pid, code });
+      // Mid-match: this might be a brand new join (reject, room's locked) or someone from THIS
+      // room reconnecting after a brief drop (welcome them back into their existing spot instead).
+      // Which one it is can only be known once their first message says 'rejoin' or 'hello', so the
+      // accept/reject decision happens there, not at 'open'.
+      conn.on('open', () => { if (!inGame && roster.length < MAX_PLAYERS) { conn._pid = nextId++; conns.set(conn._pid, conn); conn.send({ t: 'welcome', id: conn._pid, code }); } });
+      conn.on('data', d => {
+        if (d && d.t === 'rejoin' && inGame) { tryRejoin(conn, d); return; }
+        if (conn._pid === undefined) { conn.send({ t: 'full', inGame }); setTimeout(() => conn.close(), 500); return; }
+        onHostData(conn, d);
       });
-      conn.on('data', d => onHostData(conn, d));
       conn.on('close', () => { if (inGame && !netInfo.err) netInfo.err = 'conn-close'; dropClient(conn); });
       conn.on('error', e => { if (inGame) netInfo.err = 'conn-' + String((e && e.type) || 'error').slice(0, 18); if (!(e && SOFT_ERRORS.includes(e.type))) dropClient(conn); });
     });
@@ -125,13 +149,13 @@ const Net = (() => {
     cleanup();
     role = 'client'; code = c;
     setMsg(t('Conectando a la sala {code}...', { code }));
-    peer = new Peer();
+    peer = new Peer(peerOptions());
     peer.on('open', () => {
       hostConn = peer.connect(PREFIX + code, { reliable: true, serialization: 'json' });
       hostConn.on('open', () => hostConn.send({ t: 'hello', name: myName(), charId: myChar(), perks: myPerks(), ver: GAME_VERSION }));
       hostConn.on('data', onClientData);
-      hostConn.on('close', () => { if (!netInfo.err) netInfo.err = 'conn-close'; hostLost(); });
-      hostConn.on('error', e => { netInfo.err = 'conn-' + String((e && e.type) || 'error').slice(0, 18); if (!(e && SOFT_ERRORS.includes(e.type))) hostLost(); });
+      hostConn.on('close', () => { if (!netInfo.err) netInfo.err = 'conn-close'; if (inGame) attemptReconnect(); else hostLost(); });
+      hostConn.on('error', e => { netInfo.err = 'conn-' + String((e && e.type) || 'error').slice(0, 18); if (!(e && SOFT_ERRORS.includes(e.type))) { if (inGame) attemptReconnect(); else hostLost(); } });
     });
     peer.on('disconnected', reconnectSignal);
     peer.on('error', err => {
@@ -148,6 +172,8 @@ const Net = (() => {
     const id = conn._pid;
     if (id === undefined || !d) return;
     switch (d.t) {
+      case 'ping': conn.send({ t: 'pong', ts: d.ts }); break;
+      case 'pong': hostRtt.set(id, Math.max(0, Math.round(performance.now() - d.ts))); break;
       case 'hello':
         if (!roster.some(r => r.id === id)) roster.push({ id, name: cleanName(d.name), charId: validChar(d.charId), perks: cleanPerks(d.perks), ver: String(d.ver || '?').slice(0, 12) });
         broadcastLobby();
@@ -178,6 +204,8 @@ const Net = (() => {
   function onClientData(d) {
     if (!d) return;
     switch (d.t) {
+      case 'ping': send({ t: 'pong', ts: d.ts }); break;
+      case 'pong': myRtt = Math.max(0, Math.round(performance.now() - d.ts)); break;
       case 'welcome': myId = d.id; setMsg(''); showLobby(); break;
       case 'lobby':
         roster = d.players; roomSpeed = d.speed > 1 ? FAST_SPEED : 1; roomLevel = d.level === 'weekly' ? 'weekly' : levelDef(d.level).id;
@@ -224,24 +252,89 @@ const Net = (() => {
     broadcast({ t: 'lobby', players: roster, speed: roomSpeed, level: roomLevel });
     if (!inGame) renderLobby();
   }
-  function dropClient(conn) {
-    const id = conn._pid;
-    if (id === undefined || !conns.has(id)) return;
-    conns.delete(id);
+  function finalizeDrop(id) {
+    pendingRejoin.delete(id);
     roster = roster.filter(r => r.id !== id);
     if (inGame && G) {
       const P = G.players.find(p => p.id === id);
       if (P && !P.gone) {
         netReport('drop');
-        P.gone = true; P.dead = true;
+        P.gone = true; P.dead = true; P.netDisconnected = false;
         announce('{name} se ha desconectado', '#ff8a9a', { name: P.name });
         if (G.fusion && G.fusion.ids.includes(id)) endFusion();
         if (G.round && G.round.waiting.delete(id) && !G.round.waiting.size) finishRound();
       }
     } else broadcastLobby();
   }
+  // tryRejoin: a connection from the SAME room claims an id that dropped mid-match within the grace
+  // window. Rebinds the connection to the existing player - position, HP, Ki, attacks, everything the
+  // player had is untouched, since G.players was never modified while they were just disconnected.
+  function tryRejoin(conn, d) {
+    const id = d.id, pending = pendingRejoin.get(id);
+    if (!Number.isFinite(id) || !pending || performance.now() > pending.deadline) {
+      conn.send({ t: 'rejoinFail' }); setTimeout(() => conn.close(), 300); return;
+    }
+    pendingRejoin.delete(id);
+    conn._pid = id;
+    conns.set(id, conn);
+    const P = G && G.players.find(p => p.id === id);
+    if (P) P.netDisconnected = false;
+    const r = roster.find(r => r.id === id);
+    if (r) r.name = pending.name;
+    conn.send({ t: 'rejoined', id, code });
+    if (G && G.me) announce('{name} se reconectó', '#8fe3ff', { name: pending.name });
+  }
+  function dropClient(conn) {
+    const id = conn._pid;
+    if (id === undefined || !conns.has(id)) return;
+    conns.delete(id);
+    if (inGame && G) {
+      const P = G.players.find(p => p.id === id);
+      const r = roster.find(r => r.id === id);
+      if (P && !P.gone && !pendingRejoin.has(id)) {
+        // Grace window: keep their seat, position and stats exactly as they were, just freeze them
+        // (brief invulnerability so the horde doesn't finish them off while disconnected) and show a
+        // "reconnecting" state, instead of instantly treating the drop as final.
+        P.netDisconnected = true; P.inv = Math.max(P.inv, RECONNECT_GRACE / 1000);
+        pendingRejoin.set(id, { name: r ? r.name : P.name, charId: P.charId, deadline: performance.now() + RECONNECT_GRACE });
+        setTimeout(() => { if (pendingRejoin.has(id)) finalizeDrop(id); }, RECONNECT_GRACE + 50);
+      }
+      return;
+    }
+    roster = roster.filter(r => r.id !== id);
+    broadcastLobby();
+  }
+  // Client-side reconnect: tears down the dead peer/connection and opens a fresh one, claiming the
+  // same player id with 'rejoin' instead of 'hello' so the host hands back the exact same character,
+  // HP, Ki, attacks and position instead of starting a new player. Gives up after a few tries over
+  // roughly the same window as the host's own grace period (RECONNECT_GRACE), then falls back to the
+  // normal "connection lost" screen.
+  const RECONNECT_TRIES = 6, RECONNECT_RETRY_DELAY = 3000;
+  let reconnectTries = 0, reconnectTimer = null;
+  function attemptReconnect() {
+    if (role !== 'client' || !inGame) return;
+    if (reconnectTries++ >= RECONNECT_TRIES) { reconnectState = null; hostLost(); return; }
+    reconnectState = 'host';
+    setMsg(t('Reconectando con el anfitrión... ({n})', { n: reconnectTries }));
+    try { if (peer) peer.destroy(); } catch (e) { /* ya destruido */ }
+    peer = new Peer(peerOptions());
+    const retry = () => { clearTimeout(reconnectTimer); reconnectTimer = setTimeout(attemptReconnect, RECONNECT_RETRY_DELAY); };
+    peer.on('open', () => {
+      hostConn = peer.connect(PREFIX + code, { reliable: true, serialization: 'json' });
+      hostConn.on('open', () => hostConn.send({ t: 'rejoin', id: myId }));
+      hostConn.on('data', d => {
+        if (d && d.t === 'rejoined') { reconnectState = null; reconnectTries = 0; lastSnap = performance.now(); setMsg(''); }
+        else if (d && d.t === 'rejoinFail') retry();
+        else onClientData(d);
+      });
+      hostConn.on('close', retry);
+      hostConn.on('error', retry);
+    });
+    peer.on('error', retry);
+  }
   function hostLost() {
     if (role !== 'client') return;
+    reconnectState = null;
     if (inGame) netReport('drop');
     failed(t('Se perdió la conexión con el anfitrión.'));
   }
@@ -259,6 +352,8 @@ const Net = (() => {
     hostConn = null;
     if (peer) try { peer.destroy(); } catch (e) { /* ya destruido */ }
     peer = null; role = null; inGame = false; roster = []; nextId = 1;
+    reconnectState = null; reconnectTries = 0; clearTimeout(reconnectTimer);
+    pendingRejoin.clear(); myRtt = -1; hostRtt.clear();
   }
   function leave() {
     cleanup();
@@ -457,6 +552,8 @@ const Net = (() => {
       const P = G.players.find(p => p.id === id);
       if (P && !P.gone && P.lastSeen && now - P.lastSeen > CLIENT_TIMEOUT) { if (!netInfo.err) netInfo.err = 'timeout'; dropClient(conn); try { conn.close(); } catch (e) { /* ya cerrada */ } }
     }
+    pingAcc += dt * 1000;
+    if (pingAcc >= PING_RATE) { pingAcc = 0; const ping = { t: 'ping', ts: now }; for (const c of conns.values()) if (c.open) c.send(ping); }
     snapAcc += dt;
     if (snapAcc < SNAP_RATE) return;
     if (!conns.size) { snapAcc = 0; G.out = []; return; }
@@ -611,6 +708,8 @@ const Net = (() => {
 
     // El anfitrión dejó de mandar el estado: la conexión se cayó sin avisar
     if (inGame && lastSnap && performance.now() - lastSnap > HOST_TIMEOUT) { if (!netInfo.err) netInfo.err = 'timeout'; hostLost(); return; }
+    pingAcc += dt * 1000;
+    if (pingAcc >= PING_RATE && hostConn && hostConn.open) { pingAcc = 0; hostConn.send({ t: 'ping', ts: performance.now() }); }
     posAcc += dt;
     if (posAcc >= POS_RATE && hostConn && hostConn.open) {
       posAcc = 0;
@@ -643,5 +742,14 @@ const Net = (() => {
     }
   }
 
-  return { get lag() { return role === 'client' && inGame && lastSnap ? performance.now() - lastSnap : 0; }, init, send, hostTick, clientUpdate, gameOver, leave, backToLobby, changeChar, speedChanged, levelChanged, get role() { return role; } };
+  return {
+    get lag() { return role === 'client' && inGame && lastSnap ? performance.now() - lastSnap : 0; },
+    // Indicador de conexión: ping real (ida y vuelta), directo/por intermediario y cuántos jugadores
+    // llegaron. En el anfitrión, el ping mostrado es el peor de todos los invitados conectados.
+    get ping() { return role === 'client' ? myRtt : (hostRtt.size ? Math.max(...hostRtt.values()) : -1); },
+    get path() { return netInfo.path; },
+    get peerCount() { return role === 'host' ? conns.size : (hostConn && hostConn.open ? 1 : 0); },
+    get reconnecting() { return reconnectState; },
+    init, send, hostTick, clientUpdate, gameOver, leave, backToLobby, changeChar, speedChanged, levelChanged, get role() { return role; },
+  };
 })();
