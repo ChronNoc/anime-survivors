@@ -37,7 +37,7 @@ Object.assign(ATTACKS, {
 
   // ── Asta ─────────────────────────────────────────────────────────────────
   antimagicslash: {
-    name: 'Anti-Magic Slash', color: '#f2f2f2', core: '#dff0ff', type: 'projectile', kind: 'spiral', users: ['asta'], crossover: true,
+    name: 'Anti-Magic Slash', color: '#f2f2f2', core: '#dff0ff', type: 'projectile', kind: 'antimagicslash', users: ['asta'], crossover: true,
     desc: 'A wide sword swing that cuts clean through anything in its path.',
     stats: l => ({ cd: 1.3 - l * 0.07, dmg: 22 + l * 8, count: 1, speed: 9.6, r: 10 + l * 0.6,
       pierce: 99, life: 1.1, spread: 0, knock: 12 + l * 2 }),
@@ -48,7 +48,7 @@ Object.assign(ATTACKS, {
     stats: l => ({ cd: 1.75 - l * 0.09, dmg: 11 + l * 4.5, count: 3 + Math.floor(l / 2), speed: 10.2, r: 15 + l * 0.6, knock: 7 }),
   },
   blackdivider: {
-    name: 'Black Divider', color: '#3a1a52', core: '#b878ff', type: 'projectile', kind: 'rasenshuriken', users: ['asta'], crossover: true,
+    name: 'Black Divider', color: '#3a1a52', core: '#b878ff', type: 'projectile', kind: 'blackdivider', users: ['asta'], crossover: true,
     desc: 'A grounded, mana-nullifying shockwave that splits and detonates on impact.',
     stats: l => ({ cd: 5.4 - l * 0.31, dmg: 40 + l * 16, count: 1, speed: 4.6 + l * 0.15, r: 13 + l,
       pierce: 0, life: 2.6, spread: 0, explode: 62 + l * 11, home: 1.2 }),
@@ -85,7 +85,7 @@ Object.assign(ATTACKS, {
 
   // ── Yoshiyuki Taira (Beck) ───────────────────────────────────────────────
   soundwaveslash: {
-    name: 'Sound Wave Slash', color: '#ff7a3d', core: '#ffe0b3', type: 'projectile', kind: 'spiral', users: ['taira'], crossover: true,
+    name: 'Sound Wave Slash', color: '#ff7a3d', core: '#ffe0b3', type: 'projectile', kind: 'soundwave', users: ['taira'], crossover: true,
     desc: 'A cutting wall of sound thrown out in a single wide arc.',
     stats: l => ({ cd: 1.4 - l * 0.07, dmg: 20 + l * 7, count: 1, speed: 8.8, r: 10 + l * 0.6,
       pierce: 2 + Math.floor(l / 2), life: 1.15, spread: 0, knock: 10 }),

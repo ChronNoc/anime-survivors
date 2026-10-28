@@ -4238,6 +4238,49 @@ function renderWorldView(V) {
       circle(c, 0, 0, r * 0.95, false); c.setLineDash([]);
       c.fillStyle = '#eafffe'; circle(c, 0, 0, r * 0.3);
       c.restore();
+    } else if (p.kind === 'antimagicslash') {
+      // Asta's anti-magic slash: a jagged black-edged crescent that looks like it's tearing/erasing
+      // through the air rather than a clean cut, with a bright core and a thin red crack along the edge.
+      const a = Math.atan2(p.vy, p.vx), r = p.r;
+      c.save(); c.translate(Math.round(p.x), Math.round(p.y)); c.rotate(a);
+      c.fillStyle = '#0a0a0c'; c.beginPath();
+      c.moveTo(r * 1.6, 0);
+      for (let i = 0; i <= 6; i++) { const ang = -0.95 + i / 6 * 1.9, jag = i % 2 ? r * 0.18 : 0; c.lineTo(Math.cos(ang) * (r * 1.1 + jag), Math.sin(ang) * (r * 1.1 + jag)); }
+      c.lineTo(-r * 0.3, 0); c.closePath(); c.fill();
+      c.strokeStyle = '#c21e3a'; c.lineWidth = 1; c.globalAlpha = 0.85; c.stroke(); c.globalAlpha = 1;
+      c.fillStyle = p.color; c.beginPath();
+      c.moveTo(r * 1.5, 0);
+      for (let i = 0; i <= 6; i++) { const ang = -0.75 + i / 6 * 1.5; c.lineTo(Math.cos(ang) * r * 0.8, Math.sin(ang) * r * 0.8); }
+      c.closePath(); c.fill();
+      c.strokeStyle = p.core || '#ffffff'; c.lineWidth = 1.4; c.globalAlpha = 0.9;
+      c.beginPath(); c.moveTo(r * 1.3, 0); c.quadraticCurveTo(r * 0.2, -r * 0.45, -r * 0.1, 0); c.stroke();
+      c.restore(); c.globalAlpha = 1;
+    } else if (p.kind === 'blackdivider') {
+      // A grounded, slow-drifting X-shaped mana-nullifying shockwave: thick black cross with a
+      // crackling violet rim (Asta's established purple-black anti-magic palette, not generic red/orange).
+      const r = p.r, spin = p.spin * 0.08;
+      c.save(); c.translate(Math.round(p.x), Math.round(p.y)); c.rotate(spin);
+      c.globalAlpha = 0.22; c.fillStyle = p.core; circle(c, 0, 0, r * 1.6); c.globalAlpha = 1;
+      for (const rot of [0.55, -0.55]) {
+        c.save(); c.rotate(rot);
+        c.fillStyle = '#0a0612'; c.fillRect(-r * 1.3, -r * 0.22, r * 2.6, r * 0.44);
+        c.strokeStyle = p.core; c.lineWidth = 1.2; c.globalAlpha = 0.8;
+        c.strokeRect(-r * 1.3, -r * 0.22, r * 2.6, r * 0.44); c.globalAlpha = 1;
+        c.restore();
+      }
+      c.fillStyle = p.color; circle(c, 0, 0, r * 0.4);
+      c.strokeStyle = '#eaddff'; c.lineWidth = 1; c.globalAlpha = 0.7; circle(c, 0, 0, r * 0.4, false); c.globalAlpha = 1;
+      c.restore();
+    } else if (p.kind === 'soundwave') {
+      // Taira's sound-wave slash: a crescent made of concentric ripples, not a flat colored beam.
+      const a = Math.atan2(p.vy, p.vx), r = p.r;
+      c.save(); c.translate(Math.round(p.x), Math.round(p.y)); c.rotate(a); c.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 3; i++) {
+        const rr = r * (0.7 + i * 0.35);
+        c.globalAlpha = 0.75 - i * 0.2; c.strokeStyle = i === 0 ? (p.core || '#ffe0b3') : p.color; c.lineWidth = 2.2 - i * 0.4;
+        c.beginPath(); c.arc(0, 0, rr, -0.85, 0.85); c.stroke();
+      }
+      c.restore(); c.globalAlpha = 1;
     } else if (p.kind === 'disc') {
       c.save(); c.translate(Math.round(p.x), Math.round(p.y)); c.rotate(Math.round(p.spin * 2) / 2);
       c.fillStyle = 'rgba(255,216,74,0.45)'; c.beginPath(); c.ellipse(0, 0, p.r + 3, (p.r + 3) * 0.4, 0, 0, Math.PI * 2); c.fill();
