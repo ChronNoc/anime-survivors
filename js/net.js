@@ -198,6 +198,12 @@ const Net = (() => {
       case 'pick':
         if (inGame && G) applyPick(id, d.r, d.c);
         break;
+      case 'waveBuy':
+        if (inGame && G) buyWaveItem(id, d.item);
+        break;
+      case 'waveReady':
+        if (inGame && G) readyWaveShop(id);
+        break;
     }
   }
 
@@ -523,11 +529,16 @@ const Net = (() => {
       bn: G.banner ? [G.banner.text, G.banner.color, r2(G.banner.t), G.banner.params || null] : null,
       rd: G.round ? [G.round.id, G.round.kind, G.round.level, [...G.round.waiting], G.round.offers || null] : null,   // offers: deseos sorteados por jugador
       dn: G.ballsNeeded,
+      // Brotato-style wave/shop state: wave number, kills so far/needed, shared money, and (while open)
+      // the shop round's waiting set + each player's rolled item offers.
+      wv: G.wave, wk: G.waveKills, wt: G.waveTarget, mn: G.money,
+      ws: G.waveShop ? [[...G.waveShop.waiting], G.waveShop.offers] : null,
       P: G.players.map(p => [p.id, r1(p.x), r1(p.y), Math.ceil(p.hp), p.maxHp, p.facing, p.moving ? 1 : 0, p.punchT > 0 ? -r2(p.punchT) : r2(p.castT), r2(p.inv),
         r2(p.transformed), Math.floor(p.ki), p.dead ? 1 : 0, r2(p.revive), p.gone ? 1 : 0,
         p.attacks.map(a => [ATTACK_CODES.indexOf(a.id), a.lvl]), PASSIVE_CODES.map(k => p.passives[k]), p.bonusZeni,
         [p.stats.kills, p.stats.taken, Object.fromEntries(Object.entries(p.stats.dmg).map(([k, v]) => [k, Math.round(v)]))],
-        p.hidden ? 1 : 0, DIR_CODES.indexOf(p.dir || 'side'), p.senzuLeft || 0, r2(p.immortal || 0), p.wishDmg || 0, p.wishZeni || 0, r1(p.kiHold || 0), p.halo ? 1 : 0, r2(p.stone || 0), r2(p.candy || 0), r2(p.swapBody || 0), r2(p.invert || 0), r2(p.kaioken || 0), p.kaiokenBoost || 0, r2(p.tripT || 0), r2(p.poseT || 0), r2(p.koT || 0), p.owUses || 0]),
+        p.hidden ? 1 : 0, DIR_CODES.indexOf(p.dir || 'side'), p.senzuLeft || 0, r2(p.immortal || 0), p.wishDmg || 0, p.wishZeni || 0, r1(p.kiHold || 0), p.halo ? 1 : 0, r2(p.stone || 0), r2(p.candy || 0), r2(p.swapBody || 0), r2(p.invert || 0), r2(p.kaioken || 0), p.kaiokenBoost || 0, r2(p.tripT || 0), r2(p.poseT || 0), r2(p.koT || 0), p.owUses || 0,
+        Object.values(p.shop)]),
       fu: G.fusion ? [G.fusion.ids, G.fusion.driverId, G.fusion.gunnerId, G.fusion.phase, r2(G.fusion.t), G.fusion.dur, r2(G.fusion.bbCd), r1(G.fusion.mx), r1(G.fusion.my)] : null,
       ...encodeEnemiesAndPickups(), J, JO, S,
       // técnicas normales por índice; las especiales (Big Bang) por nombre
@@ -581,6 +592,8 @@ const Net = (() => {
     if (d.bn && (!G.banner || G.banner.text !== d.bn[0])) G.banner = { text: d.bn[0], color: d.bn[1], t: d.bn[2], params: d.bn[3] || null };
     G.round = d.rd ? { id: d.rd[0], kind: d.rd[1], level: d.rd[2], waiting: new Set(d.rd[3]), offers: d.rd[4] || null } : null;
     G.ballsNeeded = d.dn || 7;
+    G.wave = d.wv || 1; G.waveKills = d.wk || 0; G.waveTarget = d.wt || 1; G.money = d.mn || 0;
+    G.waveShop = d.ws ? { waiting: new Set(d.ws[0]), offers: d.ws[1] || {} } : null;
     G.fusion = d.fu ? { ids: d.fu[0], driverId: d.fu[1], gunnerId: d.fu[2], phase: d.fu[3], t: d.fu[4], dur: d.fu[5], bbCd: d.fu[6], mx: d.fu[7], my: d.fu[8] } : null;
     lastSnap = performance.now();
 
@@ -596,6 +609,7 @@ const Net = (() => {
       P.dead = !!a[11]; P.revive = a[12]; P.gone = !!a[13];
       // Semilla de reserva, efectos de los deseos y Ki concentrado (para el HUD; también los míos)
       P.senzuLeft = a[20] || 0; P.immortal = a[21] || 0; P.wishDmg = a[22] || 0; P.wishZeni = a[23] || 0; P.kiHold = a[24] || 0; P.halo = !!a[25]; P.stone = a[26] || 0; P.candy = a[27] || 0; P.swapBody = a[28] || 0; P.invert = a[29] || 0; P.kaioken = a[30] || 0; P.kaiokenBoost = a[31] || 0; P.tripT = a[32] || 0; P.poseT = a[33] || 0; P.koT = a[34] || 0; P.owUses = a[35] || 0;   // a[25]: aureola (usó la Semilla de reserva)
+      if (a[36]) Object.keys(P.shop).forEach((k, i) => { P.shop[k] = a[36][i] || 0; });   // compras de la tienda de oleada
       P.attacks = a[14].map(([i, l]) => ({ id: ATTACK_CODES[i], lvl: l, cd: 0 }));
       PASSIVE_CODES.forEach((k, i) => { P.passives[k] = a[15][i]; });
       P.bonusZeni = a[16];

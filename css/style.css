@@ -61,8 +61,8 @@ html, body { overscroll-behavior: none; }
    level list is ever unreachable, however tall it gets. */
 #setup { background: #0b0f14; padding: 0; }
 #setup .back-top { display: none; }   /* replaced by the "Volver" entry in the left nav */
-.setup3.box { all: unset; box-sizing: border-box; display: grid; grid-template-columns: 220px 1fr 300px;
-  gap: 14px; width: 100%; height: 100%; max-width: 1400px; margin: 0 auto; padding: 16px; }
+.setup3.box { all: unset; box-sizing: border-box; display: grid; grid-template-columns: 230px 1fr 320px;
+  gap: 14px; width: 100%; height: 100%; max-width: 1680px; margin: 0 auto; padding: 16px; }
 .setup-col { background: #141a21; border: 1px solid #232b35; border-radius: 14px; padding: 16px;
   display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow-y: auto; color: #e8ecf1; text-align: left; }
 
@@ -94,9 +94,12 @@ html, body { overscroll-behavior: none; }
 #setup .setup-opts { flex-direction: column; align-items: stretch; width: auto; padding: 0; background: none; }
 #setup .aim-pick { justify-content: flex-start; }
 #setup .aim-btn { max-width: none; }
-.btn-start { margin-top: auto; background: #9dff5c; color: #0b0f14; border: none; border-radius: 10px;
-  padding: 14px; font-size: 17px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 0 #6fc93a; width: 100%; }
-.btn-start:active { transform: translateY(2px); box-shadow: 0 2px 0 #6fc93a; }
+/* The Play button is pinned to the bottom of its column (not just pushed down by margin-top:auto)
+   so it's always reachable even when the level list is tall enough to need scrolling above it. */
+.btn-start { position: sticky; bottom: -16px; margin: auto -16px -16px; background: #9dff5c; color: #0b0f14;
+  border: none; border-radius: 0 0 13px 13px; padding: 16px; font-size: 17px; font-weight: 700; cursor: pointer;
+  box-shadow: 0 -6px 14px -4px rgba(0, 0, 0, .45); width: calc(100% + 32px); }
+.btn-start:active { box-shadow: 0 -3px 8px -3px rgba(0, 0, 0, .45); }
 
 @media (max-width: 980px) {
   .setup3.box { grid-template-columns: 1fr; height: auto; min-height: 100%; }

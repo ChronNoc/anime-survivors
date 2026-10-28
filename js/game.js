@@ -439,6 +439,9 @@ function makePlayer(id, name, charId, perks) {
     passives: Object.fromEntries(Object.keys(PASSIVES).map(k => [k, 0])),
     bonusZeni: 0, perks: cleanPerks(perks),
     stats: { dmg: {}, kills: 0, taken: 0 },   // daño por técnica, enemigos derrotados, daño recibido
+    // Run-scoped Brotato-style shop stats (reset every game, stack count per stat - see WAVE_SHOP_ITEMS
+    // in js/data.js and SHOP_STAT_KEYS below, which must list these same keys in this same order).
+    shop: { dmg: 0, spd: 0, hp: 0, money: 0, luck: 0, cdr: 0, magnet: 0 },
   };
   P.maxHp += perk(P, 'hp');
   P.hp = P.maxHp;
@@ -465,6 +468,9 @@ function newGame(roster, net = null, myId = 0, speed = 1, level = 'saiyan', loca
     level: 1, xp: 0, xpNext: 6, pendingLevels: 0, pendingWishes: 0, round: null, roundSeq: 0,
     kills: 0, dragonBalls: 0, ballsNeeded: 7, spawnAcc: 0, nextElite: 45, nextSwarm: 75, bossIdx: 0, nid: 1,
     banner: null, shake: 0, victoryAt: 0, out: [], emitted: {}, lv: levelDef(level), weekly,
+    // Brotato-style run economy: money drops from kills, spent in a shop that opens once a wave's
+    // kill target is reached (separate from the existing XP/technique-pick system, which is untouched).
+    wave: 1, waveKills: 0, waveTarget: waveTarget(1, roster.length), waveShop: null, money: 0,
   };
   G.bosses = bossSchedule(G.lv, weekly);
   G.practice = !!weekly && !useWeeklyTry();   // sin intentos hoy: partida de práctica (no entra al ranking)
@@ -478,7 +484,8 @@ function newGame(roster, net = null, myId = 0, speed = 1, level = 'saiyan', loca
   shownRound = '';
   document.body.classList.add('playing');
   document.body.classList.remove('snake-run');   // (la pone snakeInit: sin mapa en el Camino de la Serpiente)
-  for (const id of ['menu', 'setup', 'gameover', 'levelup', 'pause', 'lobby', 'shop', 'credits', 'help', 'techs', 'achs', 'profile', 'rank', 'news']) $(id).classList.add('hidden');
+  for (const id of ['menu', 'setup', 'gameover', 'levelup', 'waveShop', 'pause', 'lobby', 'shop', 'credits', 'help', 'techs', 'achs', 'profile', 'rank', 'news']) $(id).classList.add('hidden');
+  shownWaveShop = '';
   if (typeof Replays !== 'undefined') Replays.start();   // graba los últimos segundos (js/replays.js)
   $('btnQuit').textContent = t(net ? 'Salir de la sala' : 'Abandonar');
   $('btnResume').textContent = t(net ? 'Volver al juego' : 'Continuar');
@@ -531,7 +538,7 @@ const FUSION_POWER = { dmg: 2.5, cd: 0.65, speed: 1.35, def: 0.5 };
 // ─── Estadísticas derivadas (por jugador) ────────────────────────────────────
 function dmgMult(P) {
   if (!P) return 1;
-  let m = (rule('glass') ? 2 : 1) * (1 + 0.12 * P.passives.power) * (1 + (P.c.dmgBonus || 0)) * (1 + perk(P, 'atk')) * (1 + (P.wishDmg || 0));
+  let m = (rule('glass') ? 2 : 1) * (1 + 0.12 * P.passives.power) * (1 + (P.c.dmgBonus || 0)) * (1 + perk(P, 'atk')) * (1 + (P.wishDmg || 0)) * (1 + 0.04 * P.shop.dmg);
   if (P.halo) m *= 1 + ZENKAI;
   if (P.swapBody > 0) m *= SWAP_DMG;   // en el cuerpo de Ginyu
   if (P.kaioken > 0) m *= 1 + (P.kaiokenBoost || 0);   // Kaioken   // Zenkai: volvió de la Semilla de reserva más fuerte (la aureola ya viaja por la red)
@@ -542,7 +549,7 @@ function dmgMult(P) {
 }
 const furyBonus = P => 0.05 * (P.passives.fury || 0) * Math.max(0, 1 - P.hp / P.maxHp);
 function cdMult(P) {
-  let m = Math.max(0.4, 1 - 0.08 * P.passives.focus - (P.c.cdBonus || 0) - perk(P, 'cd'));
+  let m = Math.max(0.4, 1 - 0.08 * P.passives.focus - (P.c.cdBonus || 0) - perk(P, 'cd') - 0.03 * P.shop.cdr);
   if (P.transformed > 0) m *= 0.8;
   if (isFused(P)) m *= FUSION_POWER.cd;
   return m;
@@ -552,9 +559,10 @@ function playerSpeed(P) {
   const flee = P.c.flee && P.hp < P.maxHp * 0.3 ? 1.4 : 1;   // Mr. Satán: "retirada estratégica"
   const godspeed = P.dodgeBurstT > 0 ? 1.6 : 1;   // Killua: ráfaga de velocidad tras esquivar
   const snake = G && G.snake ? (G.snake.mode === 'race' ? SNAKE_RACE_SPEED : 1) * (P.boost > 0 ? KINTON_BOOST : 1) : 1;   // Carrera y nube Kinton
-  return P.c.speed * (1 + 0.08 * P.passives.speed + perk(P, 'spd')) * boost * snake * flee * godspeed * (P.kaioken > 0 ? 1 + (P.kaiokenBoost || 0) * 0.5 : 1);
+  return P.c.speed * (1 + 0.08 * P.passives.speed + perk(P, 'spd') + 0.03 * P.shop.spd) * boost * snake * flee * godspeed * (P.kaioken > 0 ? 1 + (P.kaiokenBoost || 0) * 0.5 : 1);
 }
-function magnetRange(P) { return (55 + 28 * P.passives.sense) * (1 + perk(P, 'magnet')); }
+function magnetRange(P) { return (55 + 28 * P.passives.sense) * (1 + perk(P, 'magnet') + 0.1 * P.shop.magnet); }
+const moneyBonus = P => 1 + 0.08 * (P.shop.money || 0);
 
 // ─── Efectos (el anfitrión también los reenvía a los clientes) ───────────────
 function emit(ev) { if (G.net && G.net.role === 'host') G.out.push(ev); }
@@ -1041,9 +1049,13 @@ function damageEnemy(e, amount, src, kb, owner, aid) {
   }
   if (e.hp <= 0) killEnemy(e, owner);
 }
+// Brotato-style wave length: a wave ends once enough enemies are killed, not purely by a timer.
+// Scaled gently by roster size so two players (who kill faster) don't clear a wave trivially fast.
+const waveTarget = (wave, players) => Math.round((9 + wave * 4) * (1 + 0.4 * (Math.max(1, players) - 1)));
 function killEnemy(e, owner) {
   e.dead = true;
   G.kills++;
+  G.waveKills++;
   // Cíborg: al morir suelta un anillo de disparos (cuidado con matarlo pegado)
   if (e.def.deathRing && !e.vanish) for (let i = 0; i < e.def.deathRing; i++) enemyShot(e, i / e.def.deathRing * Math.PI * 2, 2.4, 6, 0);
   if (owner) { owner.stats.kills++; if (e.elite) achEvent(owner, 'elite'); }
@@ -1055,7 +1067,7 @@ function killEnemy(e, owner) {
       facing: 1, color: '#684cff', shadowArmy: true });
     burst(ex, ey, '#684cff', 12, 3, 2);
   }
-  const luck = 1 + luckPct(owner && owner.passives.luck) / 100;   // Suerte de Mr. Satán
+  const luck = (1 + luckPct(owner && owner.passives.luck) / 100) * (1 + 0.05 * ((owner && owner.shop.luck) || 0));   // Suerte de Mr. Satán + ítem de suerte de la tienda
   burst(e.x, e.y, e.boss ? '#ffd93b' : '#ffffff', e.boss ? 40 : 6, e.boss ? 6 : 2.5);
   if (e.boss) { playAnim('explosion', e.x, e.y - 10, 3); playAnim('wring', e.x, e.y, 3.5); }
   else if (e.elite || e.xp >= 8) playAnim('explosion', e.x, e.y - 6, e.elite ? 2 : 1.4);
@@ -1067,6 +1079,9 @@ function killEnemy(e, owner) {
     xp -= v;
     G.pickups.push({ kind: 'xp', v, x: sx + rand(-8, 8) * (e.boss ? 3 : 1), y: sy + rand(-8, 8) * (e.boss ? 3 : 1), pulled: false, sp: 0 });
   }
+  // Run money (Brotato-style shop currency): every kill drops a small coin, bosses/elites drop more.
+  const moneyV = Math.max(1, Math.round((e.boss ? 40 : e.elite ? 6 : 1 + Math.random()) * (owner ? moneyBonus(owner) : 1)));
+  G.pickups.push({ kind: 'money', v: moneyV, x: sx + rand(-10, 10), y: sy + rand(-10, 10), pulled: false, sp: 0 });
   // Local mod: common enemies use the configurable rate, elites are generous,
   // and every boss leaves a healing bean. Luck still improves non-boss drops.
   const senzuChance = e.boss ? 1 : e.elite ? Math.max(0.35, SENZU_DROP * 3) : SENZU_DROP;
@@ -2111,7 +2126,7 @@ function updatePickups(k) {
     const owner = p.to !== undefined && G.players.find(o => o.id === p.to && !o.dead && !o.gone && !o.hidden);
     const P = owner || nearestPlayer(p.x, p.y);
     const dx = P.x - p.x, dy = P.y - p.y, d = Math.hypot(dx, dy) || 1;
-    if (!p.pulled && d < (p.kind === 'xp' ? magnetRange(P) : 40)) p.pulled = true;
+    if (!p.pulled && d < (p.kind === 'xp' || p.kind === 'money' ? magnetRange(P) : 40)) p.pulled = true;
     if (p.pulled) {   // nunca avanzan más de lo que les falta, para no pasarse de largo
       p.sp = Math.min(owner ? 16 : 14, p.sp + (owner ? 0.18 : 0.5) * k);
       const step = Math.min(p.sp * k, d);
@@ -2125,7 +2140,7 @@ function updatePickups(k) {
   if (G.pickups.length > 400) {
     const players = alivePlayers();
     const hw = Math.max(BW, 700) / 2 + 60, hh = Math.max(BH, 500) / 2 + 60;   // margen por pantallas más grandes
-    const offscreen = p => p.kind === 'xp' && !p.pulled && players.every(P => Math.abs(P.x - p.x) > hw || Math.abs(P.y - p.y) > hh);
+    const offscreen = p => (p.kind === 'xp' || p.kind === 'money') && !p.pulled && players.every(P => Math.abs(P.x - p.x) > hw || Math.abs(P.y - p.y) > hh);
     const cells = new Map();
     G.pickups = G.pickups.filter(p => {
       if (!offscreen(p)) return true;
@@ -2138,6 +2153,7 @@ function updatePickups(k) {
 }
 function collect(p, P) {
   if (p.kind === 'xp') { gainXp(p.v * (1 + (P.c.xpBonus || 0) + perk(P, 'xp'))); sfx('pickup', 0.03); }
+  else if (p.kind === 'money') { G.money += Math.round(p.v * moneyBonus(P)); sfx('pickup', 0.03); }
   else if (p.kind === 'senzu') {
     const bag = P.passives.senzubag || 0;   // Bolsa de Semillas: cura más y sube la salud máxima
     if (bag) { P.maxHp += 2 * bag; }
@@ -3515,6 +3531,117 @@ function update(dt) {
 
   if (!alivePlayers().length) endRun(false);
   else if (G.victoryAt && G.t >= G.victoryAt) endRun(true);
+  else updateWaveProgress();
+}
+// Brotato-style wave break: once the wave's kill target is reached, pause play (same G.mode='play'
+// gate the level-up 'choice' screen uses) and open a shop where the kill-money can be spent.
+function updateWaveProgress() {
+  if (G.waveShop || G.waveKills < G.waveTarget || G.round || G.victoryAt) return;
+  G.waveShop = { waiting: new Set(G.players.filter(p => !p.gone && !p.ally).map(p => p.id)), offers: {} };
+  for (const id of G.waveShop.waiting) G.waveShop.offers[id] = rollWaveShopOffers();
+  G.mode = 'shop';
+  announce('¡Oleada {n} superada!', '#ffd93b', { n: G.wave });
+  sfx('levelup');
+}
+// Each player sees a small rotating selection (not the whole table at once) so the shop stays
+// readable - rerolls aren't needed since the whole table is cheap enough to see again next wave.
+function rollWaveShopOffers() { return shuffle(WAVE_SHOP_ITEMS.map(it => it.id)).slice(0, 5); }
+function buyWaveItem(pid, itemId) {
+  const shop = G.waveShop;
+  if (!shop || !shop.waiting.has(pid)) return;
+  const P = G.players.find(p => p.id === pid);
+  const item = WAVE_SHOP_ITEMS.find(it => it.id === itemId);
+  if (!P || !item) return;
+  const lvl = P.shop[item.stat] || 0;
+  if (lvl >= item.max) return;
+  const cost = waveShopCost(item, lvl);
+  if (G.money < cost) return;
+  G.money -= cost;
+  P.shop[item.stat] = lvl + 1;
+  if (item.apply) item.apply(P);
+  addText(P.x, P.y - 30, item.name, item.color, true);
+  sfx('pickup', 0.2);
+  if (P === G.me) syncWaveShopUI();
+}
+function readyWaveShop(pid) {
+  const shop = G.waveShop;
+  if (!shop || !shop.waiting.has(pid)) return;
+  shop.waiting.delete(pid);
+  if (!shop.waiting.size) finishWaveShop();
+  else if (G.me && G.me.id === pid) syncWaveShopUI();
+}
+function finishWaveShop() {
+  G.waveShop = null;
+  G.wave++;
+  G.waveKills = 0;
+  G.waveTarget = waveTarget(G.wave, G.players.filter(p => !p.gone && !p.ally).length);
+  G.mode = 'play';
+  announce('¡Oleada {n}!', '#8fd8ff', { n: G.wave });
+}
+const waveShopCost = (item, lvl) => Math.round(item.cost * Math.pow(1.22, lvl));
+// Local co-op shares one screen: players buy one at a time, same turn-order pattern as choicePlayer().
+const waveShopPlayer = () => G && G.localCoop && G.waveShop
+  ? (G.players.find(P => G.waveShop.waiting.has(P.id)) || G.me)
+  : G.me;
+function requestBuyWaveItem(itemId) {
+  const P = waveShopPlayer();
+  if (isAuthority()) buyWaveItem(P.id, itemId);
+  else Net.send({ t: 'waveBuy', item: itemId });
+  if (G.localCoop || !G.net) syncWaveShopUI(true);
+}
+function requestReadyWaveShop() {
+  const P = waveShopPlayer();
+  if (G.net) showWaveShopWaiting();
+  if (isAuthority()) readyWaveShop(P.id);
+  else Net.send({ t: 'waveReady' });
+  if (G.localCoop && !G.net) syncWaveShopUI(true);
+}
+let shownWaveShop = '';
+function syncWaveShopUI(force) {
+  if (!G.waveShop) { if (shownWaveShop) { $('waveShop').classList.add('hidden'); shownWaveShop = ''; } return; }
+  const P = waveShopPlayer();
+  // Rebuild only when something a player would actually see has changed (whose turn it is, the shared
+  // money total, or that player's own purchase levels) - not every frame, which would thrash the DOM
+  // and make every button a moving target.
+  const key = `${P.id}:${G.money}:${Object.values(P.shop).join(',')}`;
+  if (!force && shownWaveShop === key) return;
+  shownWaveShop = key;
+  if (!G.waveShop.waiting.has(P.id)) { showWaveShopWaiting(); return; }
+  renderWaveShop(P);
+  $('waveShop').classList.remove('hidden');
+}
+function showWaveShopWaiting() {
+  $('waveShopList').innerHTML = '';
+  $('waveShopTitle').textContent = t('Esperando a los demás guerreros...');
+  $('waveShopMoney').textContent = G.money;
+  $('waveShopGo').classList.add('hidden');
+  $('waveShop').classList.remove('hidden');
+}
+function renderWaveShop(P) {
+  $('waveShopTitle').textContent = G.localCoop ? `${P.name}: ${t('Tienda de la oleada')}` : t('Tienda de la oleada');
+  $('waveShopMoney').textContent = G.money;
+  $('waveShopGo').classList.remove('hidden');
+  $('waveShopGo').textContent = t('Siguiente oleada ▶');
+  const offers = (G.waveShop.offers[P.id] || []).map(id => WAVE_SHOP_ITEMS.find(it => it.id === id)).filter(Boolean);
+  const list = $('waveShopList');
+  list.innerHTML = '';
+  for (const item of offers) {
+    const lvl = P.shop[item.stat] || 0, maxed = lvl >= item.max, cost = maxed ? 0 : waveShopCost(item, lvl);
+    const el = document.createElement('div');
+    el.className = 'shop-item' + (maxed ? ' maxed' : '');
+    el.innerHTML = `<div class="shop-icon"></div><div class="shop-body"><div class="shop-name"></div>
+      <div class="shop-desc"></div><div class="shop-pips"></div><button class="btn shop-buy"></button></div>`;
+    const icon = el.querySelector('.shop-icon'); icon.textContent = item.icon; icon.style.background = item.color;
+    el.querySelector('.shop-name').textContent = t(item.name);
+    el.querySelector('.shop-desc').textContent = t(item.desc);
+    const pips = el.querySelector('.shop-pips');
+    for (let i = 0; i < item.max; i++) { const p = document.createElement('i'); if (i < lvl) p.className = 'on'; pips.appendChild(p); }
+    const btn = el.querySelector('.shop-buy');
+    btn.textContent = maxed ? t('Completo') : t('Comprar · {n}', { n: cost });
+    btn.disabled = maxed || G.money < cost;
+    btn.onclick = () => requestBuyWaveItem(item.id);
+    list.appendChild(el);
+  }
 }
 
 // ─── Render del mundo (búfer pixel art) ──────────────────────────────────────
@@ -3597,6 +3724,14 @@ function drawGemShape(c, x, y, [d, m, l]) {
   c.fillStyle = d; c.fillRect(x - 1, y - 4, 3, 9); c.fillRect(x - 2, y - 3, 5, 7); c.fillRect(x - 3, y - 1, 7, 3);
   c.fillStyle = m; c.fillRect(x - 1, y - 3, 3, 7); c.fillRect(x - 2, y - 1, 5, 3);
   c.fillStyle = l; c.fillRect(x - 1, y - 2, 1, 2);
+}
+// Moneda de la tienda de oleada: un disco dorado chico, más grande para los botines de élites/jefes
+function drawCoin(c, x, y, v) {
+  const r = v >= 20 ? 5 : v >= 5 ? 4 : 3;
+  x = Math.round(x); y = Math.round(y);
+  c.fillStyle = '#9a6a0a'; circle(c, x, y + 1, r);
+  c.fillStyle = '#ffd93b'; circle(c, x, y, r);
+  c.fillStyle = '#ffe98a'; circle(c, x - r * 0.3, y - r * 0.3, r * 0.45);
 }
 // Semilla del Ermitaño: un poroto en pixel art (con su ranura y brillo) que flota, rodeado de un
 // aura clara que late y chispitas que suben, para que se distinga sobre el pasto
@@ -3890,6 +4025,7 @@ function renderWorldView(V) {
   // Objetos del suelo
   for (const p of G.pickups) {
     if (p.kind === 'xp') drawGem(c, p.x, p.y + Math.sin(t * 5 + p.x), p.v);
+    else if (p.kind === 'money') drawCoin(c, p.x, p.y + Math.sin(t * 5 + p.x), p.v);
     // (las semillas, las cápsulas y las Esferas del Dragón se dibujan más abajo, encima de los decorados y los personajes)
   }
   // Ondas expansivas (a ras de suelo). Online, las de los compañeros más transparentes (allyPass)
@@ -5461,6 +5597,7 @@ function closeMenuSection() {
 $('btnCredits').onclick = () => { $('menu').classList.add('hidden'); $('credits').classList.remove('hidden'); };
 $('btnCreditsBack').onclick = () => { $('credits').classList.add('hidden'); $('menu').classList.remove('hidden'); };
 $('btnShopBack').onclick = () => { $('shop').classList.add('hidden'); buildMenu(); $('menu').classList.remove('hidden'); };
+$('waveShopGo').onclick = () => requestReadyWaveShop();
 
 $('nameInput').addEventListener('input', e => { SAVE.name = e.target.value.slice(0, 12); writeSave(); });
 // "Jugar" abre la ventana de la partida: nivel, guerrero, apuntado y velocidad (en online se eligen en la sala)
@@ -5595,7 +5732,7 @@ function step(now, draw) {
     }
     tickSummon(dt);
     if (G && G.net && G.net.role === 'host') Net.hostTick(dt);
-    if (G) { syncChoiceUI(); tickPause(dt); achTick(); if (G.flashT > 0) G.flashT -= dt; }
+    if (G) { syncChoiceUI(); syncWaveShopUI(); tickPause(dt); achTick(); if (G.flashT > 0) G.flashT -= dt; }
     if (G && draw) render();
   } else if (draw) {
     renderMenuBackground(now / 1000);

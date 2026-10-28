@@ -668,6 +668,20 @@ const SHOP_UPGRADES = [
 ];
 const shopCost = (u, lvl) => Math.round(u.base * Math.pow(u.grow, lvl) / 10) * 10;
 
+// Tienda de oleada (estilo Brotato): objetos genéricos, para cualquier personaje, que se compran con el
+// dinero que sueltan los enemigos durante la partida (no con el Zeni permanente). "stat" es la clave en
+// P.shop que cuenta las compras; waveShopCost() en game.js calcula el precio a partir de "cost".
+const WAVE_SHOP_ITEMS = [
+  { id: 'wdmg',    stat: 'dmg',    name: 'Entrenamiento de combate', icon: '✊', color: '#ff5c5c', max: 10, cost: 12, desc: '+4% de daño' },
+  { id: 'wspd',    stat: 'spd',    name: 'Piernas ligeras',          icon: '»', color: '#5cf2ff', max: 8,  cost: 12, desc: '+3% de velocidad' },
+  { id: 'whp',     stat: 'hp',     name: 'Vitalidad',                icon: '♥', color: '#4dff6a', max: 12, cost: 10, desc: '+6 de salud máxima',
+    apply: P => { P.maxHp += 6; P.hp = Math.min(P.maxHp, P.hp + 6); } },
+  { id: 'wmoney',  stat: 'money',  name: 'Ojo para el botín',        icon: 'Z', color: '#ffe27a', max: 6,  cost: 14, desc: '+8% de dinero de los enemigos' },
+  { id: 'wluck',   stat: 'luck',   name: 'Suerte del guerrero',      icon: '🍀', color: '#9dff5c', max: 6, cost: 14, desc: '+5% de probabilidad de objetos raros' },
+  { id: 'wcdr',    stat: 'cdr',    name: 'Reflejos de combate',      icon: '↻', color: '#d68cff', max: 8,  cost: 13, desc: '-3% de recarga de técnicas' },
+  { id: 'wmagnet', stat: 'magnet', name: 'Imán de botín',            icon: '◎', color: '#ffb81c', max: 6,  cost: 9,  desc: '+10% de radio de recogida' },
+];
+
 // ─── Logros ───────────────────────────────────────────────────────────────────
 // goal + progress (a partir de la partida guardada): logros acumulables con barra de progreso
 const ACH_CATEGORIES = { prog: 'Progreso', fight: 'Combate', tech: 'Técnicas', power: 'Transformaciones y fusión',
