@@ -54,9 +54,55 @@ canvas { display: block; touch-action: none; image-rendering: pixelated; }
 
 /* Celulares: menú compacto, sin scroll accidental de la página */
 .char-detail { display: none; font-size: 13px; line-height: 1.4; opacity: .9; }
-.coop-setup { width: min(560px, 100%); margin: 8px auto; padding: 12px 16px; border: 2px solid #6b7bc8; border-radius: 10px; background: rgba(10,15,46,.72); text-align: center; }
-.coop-setup select { min-width: 220px; padding: 9px 12px; border: 2px solid #8fa8ff; border-radius: 8px; background: #18245e; color: #fff; font: inherit; font-weight: 700; }
 html, body { overscroll-behavior: none; }
+
+/* ── Setup screen: 3-column "choose your fighter" layout ──────────────────
+   Each column scrolls independently so nothing on the character grid or
+   level list is ever unreachable, however tall it gets. */
+#setup { background: #0b0f14; padding: 0; }
+#setup .back-top { display: none; }   /* replaced by the "Volver" entry in the left nav */
+.setup3.box { all: unset; box-sizing: border-box; display: grid; grid-template-columns: 220px 1fr 300px;
+  gap: 14px; width: 100%; height: 100%; max-width: 1400px; margin: 0 auto; padding: 16px; }
+.setup-col { background: #141a21; border: 1px solid #232b35; border-radius: 14px; padding: 16px;
+  display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow-y: auto; color: #e8ecf1; text-align: left; }
+
+.logo.small { font-size: 21px; letter-spacing: .5px; text-shadow: none; color: #d8ff8f; }
+.logo.small span { color: #fff; text-shadow: none; }
+.setup-tagline { font-size: 11px; opacity: .55; letter-spacing: 1px; text-transform: uppercase; margin: -6px 0 4px; }
+.nav-list { display: flex; flex-direction: column; gap: 6px; }
+.nav-btn { text-align: left; background: #1b222b; border: 1px solid #262f3a; color: #cdd6e0; border-radius: 9px;
+  padding: 10px 12px; font: inherit; font-size: 14px; cursor: pointer; transition: background .12s, border-color .12s; }
+.nav-btn:hover { background: #222b36; border-color: #3a4656; }
+.nav-record { margin-top: auto; background: #1b222b; border-radius: 10px; padding: 10px 12px; }
+.nav-record .label { font-size: 11px; opacity: .6; text-transform: uppercase; letter-spacing: .5px; }
+.record-big { font-size: 15px; font-weight: 700; color: #9dff5c; margin-top: 2px; }
+
+.fighter-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.fighter-head .pick { font-size: 17px; margin: 0; }
+.coop-tabs { display: flex; gap: 6px; background: #1b222b; border-radius: 9px; padding: 3px; }
+.coop-tab { background: transparent; border: none; color: #9aa6b4; padding: 7px 14px; border-radius: 7px; font: inherit; font-size: 13px; cursor: pointer; }
+.coop-tab.active { background: #9dff5c; color: #0b0f14; font-weight: 700; }
+.coop-keys-hint { margin: -4px 0 2px; }
+#setup .char-list { gap: 8px; }
+#setup .char-card { background: #1b222b; border: 1px solid #262f3a; }
+#setup .char-card:hover { border-color: #9dff5c; background: #1f2a1a; }
+#setup .char-card.selected { border-color: #9dff5c; box-shadow: 0 0 0 2px #9dff5c inset; background: #1f2a1a; }
+#setup .char-card h3 { color: #9dff5c; }
+#setup .char-detail { display: block; margin-top: 2px; }
+
+#setup .setup-run .level-list { grid-template-columns: 1fr; }
+#setup .setup-opts { flex-direction: column; align-items: stretch; width: auto; padding: 0; background: none; }
+#setup .aim-pick { justify-content: flex-start; }
+#setup .aim-btn { max-width: none; }
+.btn-start { margin-top: auto; background: #9dff5c; color: #0b0f14; border: none; border-radius: 10px;
+  padding: 14px; font-size: 17px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 0 #6fc93a; width: 100%; }
+.btn-start:active { transform: translateY(2px); box-shadow: 0 2px 0 #6fc93a; }
+
+@media (max-width: 980px) {
+  .setup3.box { grid-template-columns: 1fr; height: auto; min-height: 100%; }
+  .setup-col { overflow-y: visible; }
+  #setup { overflow-y: auto; }
+}
 @media (max-width: 640px) {
   .screen { padding: 8px; }
   .menu-box, .box { padding: 12px 10px; }

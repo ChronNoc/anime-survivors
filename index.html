@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>DBZ Survivor - Local Crossover Edition</title>
+  <title>Anime Survivors</title>
   <!-- Vista previa al compartir el link (WhatsApp, Discord, Telegram, X...) -->
   <meta name="description" content="Local crossover survival game with same-keyboard co-op, independent transformations, and moddable fighters.">
   <meta property="og:type" content="website">
-  <meta property="og:site_name" content="DBZ Survivor">
-  <meta property="og:title" content="DBZ Survivor">
+  <meta property="og:site_name" content="Anime Survivors">
+  <meta property="og:title" content="Anime Survivors">
   <meta property="og:description" content="Elige tu guerrero, sobrevive a las oleadas de los 4 niveles y derrota a los jefes. Solo o online con amigos.">
   <meta property="og:url" content="https://www.dbz-survivor.com/">
   <meta property="og:image" content="https://www.dbz-survivor.com/og-image.jpg">
@@ -49,7 +49,7 @@
       <div class="lang-toggle" role="group" aria-label="Idioma / Language">
         <button data-lang="es" title="Español">ES</button><button data-lang="en" title="English">EN</button>
       </div>
-      <h1 class="logo">DBZ <span>Survivor</span></h1>
+      <h1 class="logo">Anime <span>Survivors</span></h1>
       <p class="edition-badge">LOCAL CROSSOVER EDITION</p>
       <p class="subtitle">Sobrevive a las oleadas de los 4 niveles y derrota a sus jefes</p>
       <!-- Cartel que se escribe desde el backoffice (js/telemetry.js) -->
@@ -98,35 +98,51 @@
 
   <!-- Antes de jugar solo: nivel, guerrero, apuntado y velocidad -->
   <div id="setup" class="screen overlay hidden">
-    <div class="box setup-box">
-      <h2>Prepara tu partida</h2>
-      <h3 class="pick">Elige el nivel</h3>
-      <div id="levelList" class="level-list"></div>
-      <h3 class="pick">Elige a tu guerrero</h3>
-      <p id="setupCharNote" class="hint wk-note hidden"></p>
-      <div id="charList" class="char-list"></div>
-      <p id="charDetail" class="char-detail"></p>
-      <div id="coopSetup" class="coop-setup hidden">
-        <h3 class="pick">Jugador 2</h3>
-        <label for="coopChar2">Guerrero:</label>
-        <select id="coopChar2"></select>
-        <p class="hint"><b>Jugador 1:</b> WASD · Ki: Espacio/E<br><b>Jugador 2:</b> Flechas · Ki: Ctrl derecho (RCTRL)</p>
-      </div>
-      <!-- Barra fija de abajo: opciones de la partida y los botones, siempre a la vista -->
-      <div class="setup-foot">
-      <div class="setup-opts">
-        <div class="aim-pick" role="group" aria-label="Apuntado">
-          <span>Apuntado:</span>
-          <button id="aimAuto" class="aim-btn">⚙️ Automático <small>al enemigo más cercano</small></button>
-          <button id="aimManual" class="aim-btn">🎯 Manual <small>PC: hacia el mouse · mando: con la palanca derecha · celular: hacia donde te mueves</small></button>
+    <div class="setup3 box">
+      <!-- Columna izquierda: identidad y accesos rápidos -->
+      <aside class="setup-col setup-nav">
+        <h1 class="logo small">Anime <span>Survivors</span></h1>
+        <p class="setup-tagline">Sobrevive al caos</p>
+        <nav class="nav-list">
+          <button id="btnSetupBack" class="nav-btn">◀ Volver al menú</button>
+          <button id="btnSetupTechs" class="nav-btn">🗂️ Técnicas</button>
+          <button id="btnSetupShop" class="nav-btn">💰 Tienda de Zeni</button>
+          <button id="btnSetupAchs" class="nav-btn">🏆 Logros</button>
+          <button id="btnSetupRank" class="nav-btn">📈 Ranking</button>
+        </nav>
+        <div class="nav-record">
+          <span class="label">Tu guerrero</span>
+          <div id="setupCharMini" class="record-big">—</div>
         </div>
-        <label class="opt-speed"><input type="checkbox" id="optSpeed"> Velocidad x1.5 <small>(todo el juego va un 50% más rápido)</small></label>
-      </div>
-      <div class="setup-actions">
-        <button id="btnSetupBack" class="btn ghost">Volver</button>
-        <button id="btnSetupGo" class="btn">Jugar</button>
-      </div>
-      </div>
+      </aside>
+      <!-- Columna central: elegir guerrero (y, en co-op, cambiar entre Jugador 1 / Jugador 2) -->
+      <section class="setup-col setup-fighter">
+        <div class="fighter-head">
+          <h3 class="pick">Elige a tu guerrero</h3>
+          <div id="coopTabs" class="coop-tabs hidden" role="group" aria-label="Jugador">
+            <button id="tabP1" class="coop-tab active">Jugador 1</button>
+            <button id="tabP2" class="coop-tab">Jugador 2</button>
+          </div>
+        </div>
+        <p id="setupCharNote" class="hint wk-note hidden"></p>
+        <p class="hint coop-keys-hint hidden" id="coopKeysHint"><b>Jugador 1:</b> WASD · Ki: Espacio/E<br><b>Jugador 2:</b> Flechas · Ki: Ctrl derecho (RCTRL)</p>
+        <div id="charList" class="char-list"></div>
+        <p id="charDetail" class="char-detail"></p>
+      </section>
+      <!-- Columna derecha: nivel, opciones de la partida y el botón de jugar -->
+      <aside class="setup-col setup-run">
+        <h3 class="pick">Elige el nivel</h3>
+        <div id="levelList" class="level-list"></div>
+        <div class="setup-opts">
+          <div class="aim-pick" role="group" aria-label="Apuntado">
+            <span>Apuntado:</span>
+            <button id="aimAuto" class="aim-btn">⚙️ Automático <small>al enemigo más cercano</small></button>
+            <button id="aimManual" class="aim-btn">🎯 Manual <small>PC: hacia el mouse · mando: con la palanca derecha · celular: hacia donde te mueves</small></button>
+          </div>
+          <label class="opt-speed"><input type="checkbox" id="optSpeed"> Velocidad x1.5 <small>(todo el juego va un 50% más rápido)</small></label>
+        </div>
+        <button id="btnSetupGo" class="btn btn-start">▶ Jugar</button>
+      </aside>
     </div>
   </div>
 

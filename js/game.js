@@ -5037,7 +5037,7 @@ function buildMenu() {
   for (const id in CHARACTERS) {
     const c = CHARACTERS[id];
     const card = document.createElement('div');
-    card.className = 'char-card' + (id === myChar() ? ' selected' : '') + (fixed && id !== fixed ? ' wk-off' : '');
+    card.className = 'char-card' + (id === activeSetupChar() ? ' selected' : '') + (fixed && id !== fixed ? ' wk-off' : '');
     const cv = document.createElement('canvas');
     cv.width = 96; cv.height = 132;
     card.appendChild(cv);
@@ -5083,22 +5083,27 @@ function buildMenu() {
     card._cv = cv; card._c = c; card._id = id;
   }
 }
+// En co-op, la rejilla de guerreros se comparte entre los dos jugadores: esta "casilla activa"
+// (0 = Jugador 1, 1 = Jugador 2) decide a cuál de los dos afecta un clic sobre una tarjeta.
+let setupCoopSlot = 0;
+const activeSetupChar = () => (localCoopSetup && setupCoopSlot === 1) ? (CHARACTERS[SAVE.coopChar2] ? SAVE.coopChar2 : myChar()) : myChar();
 function selectChar(id) {
   if (weeklyChar() && id !== weeklyChar()) return;   // desafío semanal con guerrero fijo
-  SAVE.char = id; writeSave();
+  if (localCoopSetup && setupCoopSlot === 1) { SAVE.coopChar2 = id; writeSave(); }
+  else { SAVE.char = id; writeSave(); Net.changeChar(id); }
   for (const card of $('charList').children) card.classList.toggle('selected', card._id === id);
   updateCharDetail();
-  Net.changeChar(id);
 }
 // Resumen del personaje elegido (solo visible en pantallas chicas, donde las tarjetas son compactas)
 function updateCharDetail() {
-  const c = CHARACTERS[myChar()];
+  const c = CHARACTERS[activeSetupChar()];
   $('charDetail').textContent = `${c.name}: ${ATTACKS[c.start].name} · ${c.transform} · ${c.perk}`;
+  const mini = $('setupCharMini'); if (mini) mini.textContent = CHARACTERS[myChar()].name;
 }
 function renderMenuPortraits(t) {
   for (const card of $('charList').children) {
     const cx = card._cv.getContext('2d'), c = card._c;
-    const active = !card.classList.contains('locked') && (card.matches(':hover') || card._id === myChar());
+    const active = !card.classList.contains('locked') && (card.matches(':hover') || card._id === activeSetupChar());
     cx.setTransform(1, 0, 0, 1, 0, 0);
     cx.clearRect(0, 0, 96, 132);
     cx.imageSmoothingEnabled = false;
@@ -5460,28 +5465,43 @@ $('btnShopBack').onclick = () => { $('shop').classList.add('hidden'); buildMenu(
 $('nameInput').addEventListener('input', e => { SAVE.name = e.target.value.slice(0, 12); writeSave(); });
 // "Jugar" abre la ventana de la partida: nivel, guerrero, apuntado y velocidad (en online se eligen en la sala)
 let localCoopSetup = false;
-function populateCoopCharacters() {
-  const sel = $('coopChar2'), fixed = weeklyChar();
-  const ids = Object.keys(CHARACTERS).filter(id => fixed ? id === fixed : (isUnlocked(id) || weeklyOpen()));
-  const fallback = ids.find(id => id !== myChar()) || ids[0] || myChar();
-  const chosen = ids.includes(SAVE.coopChar2) ? SAVE.coopChar2 : fallback;
-  sel.innerHTML = ids.map(id => `<option value="${id}">${esc(CHARACTERS[id].name)}</option>`).join('');
-  sel.value = chosen;
-  SAVE.coopChar2 = chosen;
+// En co-op, el Jugador 2 elige su guerrero en la misma rejilla que el Jugador 1 (pestaña "Jugador 2"),
+// no en un <select> aparte - así los dos tienen el mismo selector visual completo.
+function ensureCoopChar2() {
+  const fixed = weeklyChar();
+  const available = Object.keys(CHARACTERS).filter(id => fixed ? id === fixed : (isUnlocked(id) || weeklyOpen()));
+  const fallback = available.find(id => id !== myChar()) || available[0] || myChar();
+  if (!available.includes(SAVE.coopChar2)) { SAVE.coopChar2 = fallback; writeSave(); }
 }
+function setSetupTab(slot) {
+  setupCoopSlot = slot;
+  $('tabP1').classList.toggle('active', slot === 0);
+  $('tabP2').classList.toggle('active', slot === 1);
+  buildMenu();
+}
+$('tabP1').onclick = () => setSetupTab(0);
+$('tabP2').onclick = () => setSetupTab(1);
 function openSetup(coop = false) {
   SFX.unlock();
   localCoopSetup = !!coop;
-  $('coopSetup').classList.toggle('hidden', !localCoopSetup);
+  setupCoopSlot = 0;
+  $('coopTabs').classList.toggle('hidden', !localCoopSetup);
+  $('coopKeysHint').classList.toggle('hidden', !localCoopSetup);
+  $('tabP1').classList.add('active'); $('tabP2').classList.remove('active');
   $('btnSetupGo').textContent = t(localCoopSetup ? 'Jugar co-op' : 'Jugar');
-  if (localCoopSetup) populateCoopCharacters();
+  if (localCoopSetup) ensureCoopChar2();
+  buildMenu();
   $('menu').classList.add('hidden'); $('setup').classList.remove('hidden'); $('setup').scrollTop = 0;
 }
 $('btnSolo').onclick = () => openSetup(false);
 $('btnCoop').onclick = () => openSetup(true);
-$('coopChar2').onchange = e => { SAVE.coopChar2 = e.target.value; writeSave(); };
 $('btnSetupGo').onclick = () => { $('setup').classList.add('hidden'); SFX.unlock(); if (localCoopSetup) startLocalCoop(); else startSolo(); };
 $('btnSetupBack').onclick = () => { $('setup').classList.add('hidden'); $('menu').classList.remove('hidden'); };
+// Accesos rápidos desde la pantalla de preparación (misma pantalla que abren desde el menú principal)
+$('btnSetupTechs').onclick = () => { $('setup').classList.add('hidden'); $('btnTechs').click(); };
+$('btnSetupShop').onclick = () => { $('setup').classList.add('hidden'); $('btnShop').click(); };
+$('btnSetupAchs').onclick = () => { $('setup').classList.add('hidden'); $('btnAchs').click(); };
+$('btnSetupRank').onclick = () => { $('setup').classList.add('hidden'); $('btnRank').click(); };
 // Apuntado manual de las técnicas (en PC el cursor pasa a ser una mira): es de cada jugador
 function setAim(on) {
   SAVE.aim = !!on; writeSave();
