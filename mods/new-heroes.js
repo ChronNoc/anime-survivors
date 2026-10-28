@@ -43,10 +43,9 @@ Object.assign(ATTACKS, {
       pierce: 99, life: 1.1, spread: 0, knock: 12 + l * 2 }),
   },
   demonsliverush: {
-    name: 'Demon-Slayer Rush', color: '#e8e8e8', core: '#ffffff', type: 'projectile', users: ['asta'], crossover: true,
-    desc: 'A flurry of short-range slashes thrown out in quick succession.',
-    stats: l => ({ cd: 1.75 - l * 0.09, dmg: 10 + l * 4, count: 3 + l, speed: 10.2, r: 6 + l * 0.25,
-      pierce: 0, life: 0.85, spread: 0.18, knock: 6 }),
+    name: 'Demon-Slayer Rush', color: '#e8e8e8', core: '#ffffff', type: 'rush', users: ['asta'], crossover: true,
+    desc: 'Asta closes the distance in an instant and cuts down everything between him and his target.',
+    stats: l => ({ cd: 1.75 - l * 0.09, dmg: 11 + l * 4.5, count: 3 + Math.floor(l / 2), speed: 10.2, r: 15 + l * 0.6, knock: 7 }),
   },
   blackdivider: {
     name: 'Black Divider', color: '#3a1a52', core: '#b878ff', type: 'projectile', kind: 'rasenshuriken', users: ['asta'], crossover: true,

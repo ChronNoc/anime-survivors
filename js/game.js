@@ -1223,7 +1223,7 @@ function fireAttacks(P, dt) {
     if (a.cd > 0) continue;
     const s = attackStats(P, a.id, a.lvl);
     // Las ondas (Ráfaga de Puños, Onda Explosiva) esperan a tener a alguien dentro de su alcance
-    const tgt = nearestEnemy(P, def.kick ? 230 : def.type === 'beam' ? s.len + 40 : def.type === 'nova' ? s.radius + 30 : def.type === 'rain' ? 380 : def.type === 'decoy' || def.type === 'buff' ? 260 : 480);
+    const tgt = nearestEnemy(P, def.kick || def.type === 'rush' ? 230 : def.type === 'beam' ? s.len + 40 : def.type === 'nova' ? s.radius + 30 : def.type === 'rain' ? 380 : def.type === 'decoy' || def.type === 'buff' ? 260 : 480);
     if (!tgt) { a.cd = 0.2; continue; }
     a.cd = s.cd * cdm;
     if (P.c.sfxVoice) sfx(P.c.sfxVoice, 0.12);   // some characters layer a signature sound on every cast (e.g. Taira's bass)
@@ -1309,6 +1309,26 @@ function fireAttacks(P, dt) {
         if (Math.random() < 0.35) addText(P.x, P.y - 34, '¡MEGATON PUNCH!', '#ffd93b', true);
       }
       sfx('hit', 0.2);
+    } else if (def.type === 'rush') {
+      // A real melee rush (Jinwoo's Dagger Rush, Asta's Demon-Slayer Rush, etc.): the fighter physically
+      // closes the distance and cuts through anyone in the way, instead of throwing a weapon. Damage is
+      // a short line of novas along the dash path (small radius, quick growth) - that reuses the nova
+      // system's existing host-authoritative sync instead of needing new netcode for a moving hitbox.
+      const dist = Math.hypot(tgt.x - P.x, tgt.y - P.y) || 1;
+      const steps = Math.max(2, Math.round(s.count));
+      const dashDur = Math.min(0.45, Math.max(0.12, dist / (s.speed * 32)));
+      for (let i = 1; i <= steps; i++) {
+        const q = i / steps;
+        G.novas.push({ x: P.x + (tgt.x - P.x) * q, y: P.y + (tgt.y - P.y) * q, r: 0, maxR: s.r, dmg: s.dmg,
+          hit: new Set(), color: def.color, kb: s.knock || 8, owner: P, aid: a.id });
+      }
+      if (P === G.me) {
+        P.dashT = dashDur; P.dashVX = (tgt.x - P.x) / dashDur; P.dashVY = (tgt.y - P.y) / dashDur;
+        P.dashColor = def.color; P.inv = Math.max(P.inv, dashDur + 0.1);
+      }
+      P.punchT = 0.3;
+      addText(P.x, P.y - 34, def.name, def.color, true);
+      sfx('hit', 0.25);
     } else if (def.kick) {   // Dynamite Kick: patada voladora... o se cae de cara
       if (Math.random() < s.trip) {
         P.tripT = 1.1;
@@ -1975,6 +1995,7 @@ function updateEnemies(k, dt) {
     const ox = e.x, oy = e.y;
     const P = nearestPlayer(e.x, e.y);
     const dc = !e.boss && G.decoys.length ? nearDecoy(e) : null, T = dc || P;   // Zanzoken: van hacia la imagen residual
+    if (!T) continue;   // no alive, non-hidden target to chase this frame (e.g. everyone just fused/hid at once)
     const dx = T.x - e.x, dy = T.y - e.y, d = Math.hypot(dx, dy) || 1;
     let sp = e.speed;
     const stunned = e.stun > 0;   // Taiyoken: paralizado, no se mueve ni ataca
@@ -4473,6 +4494,18 @@ function drawPlayer(c, P, overlay = false) {
   if (tint) c.filter = tint;
   // Mr. Satán: tirado en el piso (Dynamite Kick fallida) o posando (al subir de nivel o mientras pelea Buu)
   const special = P.koT > 0 ? koAnim(P) : P.tripT > 0 ? 'trip' : (P.poseT > 0 || (ch.buddy && P.transformed > 0 && !P.moving)) ? 'pose' : null;
+  // Melee rush / flying kick: a speed-line trail behind the dash so it reads as a deliberate charge,
+  // not just the sprite sliding. Color matches the move that triggered it (plain white for the kick).
+  if (!overlay && P.dashT > 0 && (P.dashVX || P.dashVY)) {
+    const a = Math.atan2(P.dashVY, P.dashVX), col = P.dashColor || '#ffffff';
+    c.save(); c.translate(Math.round(P.x), Math.round(P.y)); c.rotate(a); c.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 5; i++) {
+      const off = -16 - i * 7, w = 7 - i;
+      c.globalAlpha = 0.5 - i * 0.08; c.strokeStyle = i % 2 ? '#ffffff' : col; c.lineWidth = Math.max(1, w * 0.5);
+      c.beginPath(); c.moveTo(off, -3 - i); c.lineTo(off - 14, -3 - i); c.moveTo(off, 3 + i); c.lineTo(off - 14, 3 + i); c.stroke();
+    }
+    c.restore(); c.globalAlpha = 1;
+  }
   if (!(P.inv > 0 && !P.bubble && Math.floor(P.inv * 20) % 2)) {   // con el escudo puesto no parpadea
     drawActor(c, ch.look, P.x, P.y, {
       facing: P.facing, dir: special === 'pose' ? 'down' : special ? 'side' : P.dir, t: G.t + P.id * 0.37,

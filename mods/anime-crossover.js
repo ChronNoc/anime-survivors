@@ -54,10 +54,9 @@ Object.assign(ATTACKS, {
   },
 
   monarchdagger: {
-    name: "Monarch's Dagger Rush", color: '#50cfff', core: '#f2fbff', type: 'projectile', kind: 'shadowdagger', users: ['jinwoo'], crossover: true,
-    desc: 'Twin mana daggers cut through enemies and leave blue shadow-fire trails.',
-    stats: l => ({ cd: 1.25 - l * 0.065, dmg: 18 + l * 7, count: 2 + Math.floor(l / 2), speed: 12.4,
-      r: 7 + l * 0.25, pierce: 1 + Math.floor(l / 2), life: 1.18, spread: 0.1, knock: 9 }),
+    name: "Monarch's Dagger Rush", color: '#50cfff', core: '#f2fbff', type: 'rush', users: ['jinwoo'], crossover: true,
+    desc: 'Jinwoo closes in with twin shadow daggers, cutting through anyone caught between him and his target.',
+    stats: l => ({ cd: 1.25 - l * 0.065, dmg: 19 + l * 7.5, count: 2 + Math.floor(l / 2), speed: 12.4, r: 16 + l * 0.7, knock: 9 }),
   },
   rulersauthority: {
     name: "Ruler's Authority", color: '#8c63ff', type: 'nova', kind: 'rulersauthority', users: ['jinwoo'], crossover: true,
