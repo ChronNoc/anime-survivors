@@ -1914,13 +1914,24 @@ function updateEbeams(dt) {
   G.ebeams = G.ebeams.filter(b => !b.dead);
 }
 const BOSS_ENRAGE_TIME = 75, BOSS_ENRAGE_SPEED = 1.5, BOSS_ENRAGE_DMG = 1.35;
+// HP-threshold phases: every boss (not just special-cased ones) hits harder and acts faster as its
+// health drops, instead of the fight staying the same pace from the first hit to the last.
+const BOSS_PHASE_THRESHOLDS = [0.65, 0.3], BOSS_PHASE_DMG = 1.18, BOSS_PHASE_SPEED_STEP = 0.14;
 function bossAI(e, target, k, dt, dx, dy, d) {
   if (!e.enraged && G.t - (e.spawnT || 0) > BOSS_ENRAGE_TIME) {   // drags on too long: the boss stops holding back
     e.enraged = true; e.dmg *= BOSS_ENRAGE_DMG;
     announce('¡{name} se enfurece!', '#ff2d2d', { name: e.def.name });
     G.shake = Math.max(G.shake, 0.7); sfx('power');
   }
-  const enrageDt = dt * (e.enraged ? BOSS_ENRAGE_SPEED : 1);
+  const hpStage = BOSS_PHASE_THRESHOLDS.filter(th => e.hp / e.maxHp <= th).length;
+  if (hpStage > (e.hpStage || 0)) {
+    e.hpStage = hpStage; e.dmg *= BOSS_PHASE_DMG; e.phaseSpeedMult = 1 + hpStage * BOSS_PHASE_SPEED_STEP;
+    announce('¡{name} libera más poder!', '#ffae33', { name: e.def.name });
+    G.shake = Math.max(G.shake, 0.6); sfx('power');
+    burst(e.x, e.y, '#ffae33', 24, 5, 4);
+    e.cd = Math.min(e.cd, 0.6);   // vuelve a atacar casi enseguida, para que el salto de fase se note
+  }
+  const enrageDt = dt * (e.enraged ? BOSS_ENRAGE_SPEED : 1) * (e.phaseSpeedMult || 1);
   tickBossCast(e, dt);
   if (e.cast) return;   // cargando su técnica: no hace otra cosa
   const sp = BOSS_SPECIAL[e.id];
