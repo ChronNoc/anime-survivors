@@ -475,6 +475,9 @@ function newGame(roster, net = null, myId = 0, speed = 1, level = 'saiyan', loca
     // Brotato-style run economy: money drops from kills, spent in a shop that opens once a wave's
     // kill target is reached (separate from the existing XP/technique-pick system, which is untouched).
     wave: 1, waveKills: 0, waveTarget: waveTarget(1, roster.length), waveShop: null, money: 0,
+    // Shared co-op ultimate meter: fills from damage dealt by either living, non-ally player; only
+    // relevant with 2+ such players (see TEAM_ULT_MAX / teamUltActive() / triggerTeamUltimate()).
+    teamUlt: 0,
   };
   G.bosses = bossSchedule(G.lv, weekly);
   G.practice = !!weekly && !useWeeklyTry();   // sin intentos hoy: partida de práctica (no entra al ranking)
@@ -1045,6 +1048,7 @@ function damageEnemy(e, amount, src, kb, owner, aid) {
   }
   e.hp -= d;
   e.flash = 0.08;
+  if (teamUltActive()) G.teamUlt = Math.min(TEAM_ULT_MAX, G.teamUlt + d * 0.06);
   // Tagged {dmg:true} so each viewer can hide damage numbers locally (SAVE.fx.dmgNumbers, in drawTexts)
   // without changing what gets sent over the network - everyone still agrees on the real damage done.
   addText(e.x, e.y - e.r * 1.6, crit ? d + '!' : d, crit ? '#ffdd33' : '#ffffff', crit ? 2 : false, { dmg: true });
@@ -3574,7 +3578,28 @@ function update(dt) {
 
   if (!alivePlayers().length) endRun(false);
   else if (G.victoryAt && G.t >= G.victoryAt) endRun(true);
-  else updateWaveProgress();
+  else { updateWaveProgress(); if (G.teamUlt >= TEAM_ULT_MAX) triggerTeamUltimate(); }
+}
+// Shared co-op ultimate: only meaningful with 2+ living, non-ally players (solo play never fills it).
+const TEAM_ULT_MAX = 100;
+const teamUltActive = () => G.players.filter(p => !p.dead && !p.gone && !p.ally).length >= 2;
+function triggerTeamUltimate() {
+  G.teamUlt = 0;
+  const team = G.players.filter(p => !p.dead && !p.gone && !p.ally);
+  if (team.length < 2) return;
+  const mx = team.reduce((s, p) => s + p.x, 0) / team.length, my = team.reduce((s, p) => s + p.y, 0) / team.length;
+  const names = team.map(p => p.name).join(' + ');
+  announce(t('¡Ataque combinado de {names}!', { names }), '#ffe14d');
+  G.shake = Math.max(G.shake, 1);
+  sfx('boom'); sfx('power');
+  for (const P of team) {
+    burst(P.x, P.y, formAura(P) || P.c.aura, 26, 7, 4);
+    G.novas.push({ x: P.x, y: P.y, r: 0, maxR: 150, dmg: 70 + G.level * 6, hit: new Set(), color: P.c.aura, kb: 22, owner: P, aid: 'ki', stun: 0.4 });
+  }
+  // A third, bigger shared burst at the team's midpoint so it reads as one combined attack, not two separate ones
+  G.novas.push({ x: mx, y: my, r: 0, maxR: 190, dmg: 90 + G.level * 8, hit: new Set(), color: '#ffe14d', kb: 10, owner: team[0], aid: 'ki', stun: 0.6 });
+  burst(mx, my, '#ffffff', 40, 8, 5);
+  playAnim('explosion', mx, my, 3.5);
 }
 // Brotato-style wave break: once the wave's kill target is reached, pause play (same G.mode='play'
 // gate the level-up 'choice' screen uses) and open a shop where the kill-money can be spent.
@@ -5145,6 +5170,15 @@ function drawHUD() {
   const touchUi = isTouch() && W < 900;
   const kw = touchUi ? Math.min(360, W - 120) : Math.min(360, W - 40), kx = touchUi ? 12 : (W - kw) / 2;
   const kh = 14, ky = H - 26 - kh;   // 2.14.1: barra más gruesa y con su propio marco (a algunos jugadores les costaba verla)
+  // Medidor de ataque combinado (co-op, 2+ jugadores vivos): propia barra fina arriba de la de Ki
+  // (claramente por encima del panel de la barra de Ki -que se dibuja después y taparía cualquier
+  // cosa que se superponga con su marco- para que no quede pintada por encima)
+  if (teamUltActive()) {
+    const tuh = 8, tuy = ky - 25 - tuh - 10, ready = G.teamUlt >= TEAM_ULT_MAX;
+    panel(kx - 10, tuy - 4, kw + 20, tuh + 8);
+    pbar(kx, tuy, kw, tuh, G.teamUlt / TEAM_ULT_MAX, ready ? (Math.floor(G.t * 6) % 2 ? '#ffe14d' : '#fff27a') : '#9a6cff');
+    hudText(ready ? t('¡ATAQUE COMBINADO LISTO!') : t('Ataque combinado · {n}%', { n: Math.floor(G.teamUlt) }), kx + kw / 2, tuy + tuh + 1, 10, '#ffffff', 'center');
+  }
   const kiVerb = t(isTouch() ? 'Toca ¡KI!' : 'Espacio');
   const F = G.fusion, blink = Math.floor(G.t * 6) % 2;
   let frac, color, label, labelColor = '#ffffff', focusBar = -1;   // -1: no se está concentrando

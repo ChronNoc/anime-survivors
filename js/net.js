@@ -531,7 +531,7 @@ const Net = (() => {
       dn: G.ballsNeeded,
       // Brotato-style wave/shop state: wave number, kills so far/needed, shared money, and (while open)
       // the shop round's waiting set + each player's rolled item offers.
-      wv: G.wave, wk: G.waveKills, wt: G.waveTarget, mn: G.money,
+      wv: G.wave, wk: G.waveKills, wt: G.waveTarget, mn: G.money, tu: r1(G.teamUlt),
       ws: G.waveShop ? [[...G.waveShop.waiting], G.waveShop.offers] : null,
       P: G.players.map(p => [p.id, r1(p.x), r1(p.y), Math.ceil(p.hp), p.maxHp, p.facing, p.moving ? 1 : 0, p.punchT > 0 ? -r2(p.punchT) : r2(p.castT), r2(p.inv),
         r2(p.transformed), Math.floor(p.ki), p.dead ? 1 : 0, r2(p.revive), p.gone ? 1 : 0,
@@ -592,7 +592,7 @@ const Net = (() => {
     if (d.bn && (!G.banner || G.banner.text !== d.bn[0])) G.banner = { text: d.bn[0], color: d.bn[1], t: d.bn[2], params: d.bn[3] || null };
     G.round = d.rd ? { id: d.rd[0], kind: d.rd[1], level: d.rd[2], waiting: new Set(d.rd[3]), offers: d.rd[4] || null } : null;
     G.ballsNeeded = d.dn || 7;
-    G.wave = d.wv || 1; G.waveKills = d.wk || 0; G.waveTarget = d.wt || 1; G.money = d.mn || 0;
+    G.wave = d.wv || 1; G.waveKills = d.wk || 0; G.waveTarget = d.wt || 1; G.money = d.mn || 0; G.teamUlt = d.tu || 0;
     G.waveShop = d.ws ? { waiting: new Set(d.ws[0]), offers: d.ws[1] || {} } : null;
     G.fusion = d.fu ? { ids: d.fu[0], driverId: d.fu[1], gunnerId: d.fu[2], phase: d.fu[3], t: d.fu[4], dur: d.fu[5], bbCd: d.fu[6], mx: d.fu[7], my: d.fu[8] } : null;
     lastSnap = performance.now();

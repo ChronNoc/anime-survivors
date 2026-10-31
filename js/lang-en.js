@@ -757,6 +757,9 @@ EN_TEXT = {
   // ── Tienda de oleada (estilo Brotato) ──
   'Tienda de la oleada': 'Wave shop',
   'Dinero del equipo:': 'Team money:',
+  '¡Ataque combinado de {names}!': '{names} combined attack!',
+  '¡ATAQUE COMBINADO LISTO!': 'TEAM ATTACK READY!',
+  'Ataque combinado · {n}%': 'Team attack · {n}%',
   'Siguiente oleada ▶': 'Next wave ▶',
   'Comprar · {n}': 'Buy · {n}',
   '¡Oleada {n} superada!': 'Wave {n} cleared!',
