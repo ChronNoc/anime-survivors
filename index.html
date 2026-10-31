@@ -330,6 +330,13 @@
             <h3>Opciones</h3>
             <label class="vol-row">🎵 Música <input type="range" id="volMusic" min="0" max="100" step="5"><span id="volMusicVal"></span></label>
             <label class="vol-row">🔊 Efectos <input type="range" id="volSfx" min="0" max="100" step="5"><span id="volSfxVal"></span></label>
+            <!-- Accesibilidad / calidad visual: solo afectan lo que ve este jugador, nunca la partida compartida -->
+            <h3>Accesibilidad</h3>
+            <label class="vol-row">✨ Partículas <input type="range" id="fxParticles" min="0" max="150" step="10"><span id="fxParticlesVal"></span></label>
+            <label class="vol-row">📳 Temblor de cámara <input type="range" id="fxShake" min="0" max="150" step="10"><span id="fxShakeVal"></span></label>
+            <label class="vol-row">💥 Destellos <input type="range" id="fxFlash" min="0" max="150" step="10"><span id="fxFlashVal"></span></label>
+            <label class="opt-speed"><input type="checkbox" id="fxDmgNumbers"> Números de daño</label>
+            <label class="opt-speed"><input type="checkbox" id="fxAbilityNames"> Nombres de técnicas en pantalla</label>
           </div>
           <div class="pause-actions">
             <button id="btnResume" class="btn">Continuar</button>

@@ -49,7 +49,10 @@ async function sha256(text) {
 const SAVE_KEY = 'dbzsurvivor.save.v1';
 function loadSave() {
   const def = { best: {}, zeni: 0, runs: 0, wins: 0, name: '', char: 'goku', upgrades: {}, unlocked: {}, vegetaKills: 0, ach: {}, stats: {},
-    level: 'saiyan', levelsWon: {} };
+    level: 'saiyan', levelsWon: {},
+    // Accessibility/quality options: 0-1 multipliers for particle count, camera shake and flash
+    // brightness, plus toggles for damage numbers and the big ability-name callouts.
+    fx: { particles: 1, shake: 1, flash: 1, dmgNumbers: true, abilityNames: true } };
   let s;
   try { s = Object.assign(def, JSON.parse(localStorage.getItem(SAVE_KEY)) || {}); } catch (e) { s = def; }
   // Estadísticas acumuladas para los logros (bajas totales, victorias por guerrero, evoluciones vistas)
@@ -60,6 +63,7 @@ function loadSave() {
     lvWins: {}, onlineWins: 0, weeklyWins: 0, weeklyWeeks: {},
     // Perfil (2.22.0): partidas y segundos por guerrero, quién te derrotó (id del jefe, o "horde"), daño total por técnica
     charRuns: {}, charTime: {}, killedBy: {}, techDmg: {} }, s.stats);
+  s.fx = Object.assign({ particles: 1, shake: 1, flash: 1, dmgNumbers: true, abilityNames: true }, s.fx);
   // La mejora «Técnica secreta» (1500 Zeni) se reemplazó: se devuelve lo que costó
   if (s.upgrades && s.upgrades.moves) { s.zeni += 1500; delete s.upgrades.moves; s.refundedMoves = true; }
   return s;
@@ -641,6 +645,9 @@ function burst(x, y, color, n = 8, speed = 3, size = 3) {
   emit(['b', Math.round(x), Math.round(y), color, n, speed, size]);
 }
 function localBurst(x, y, color, n, speed, size) {
+  // Particle density is a purely local display preference - it must never change what gets sent
+  // to other players (burst() still emits the original n), only how many of them THIS screen draws.
+  n = Math.round(n * SAVE.fx.particles);
   for (let i = 0; i < n; i++) {
     const a = Math.random() * Math.PI * 2, v = rand(0.4, 1) * speed;
     G.fx.push({ type: 'spark', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: rand(0.3, 0.6), color, size });
@@ -1038,7 +1045,9 @@ function damageEnemy(e, amount, src, kb, owner, aid) {
   }
   e.hp -= d;
   e.flash = 0.08;
-  addText(e.x, e.y - e.r * 1.6, crit ? d + '!' : d, crit ? '#ffdd33' : '#ffffff', crit ? 2 : false);   // crítico: más grande
+  // Tagged {dmg:true} so each viewer can hide damage numbers locally (SAVE.fx.dmgNumbers, in drawTexts)
+  // without changing what gets sent over the network - everyone still agrees on the real damage done.
+  addText(e.x, e.y - e.r * 1.6, crit ? d + '!' : d, crit ? '#ffdd33' : '#ffffff', crit ? 2 : false, { dmg: true });
   if (crit || Math.random() < (e.boss ? 0.3 : 0.12)) playAnim('impact', e.x + rand(-4, 4), e.y - e.r * 0.8, crit ? 1 : 0.7);
   sfx('hit', 0.05);
   if (src) {
@@ -1230,7 +1239,7 @@ function fireAttacks(P, dt) {
     // Crossover techniques announce themselves periodically so their personal
     // moves stay readable even when the screen is crowded with enemies.
     if (def.crossover && G.t >= (P.crossoverLabelT || 0)) {
-      addText(P.x, P.y - 36, def.name, def.color, true);
+      addText(P.x, P.y - 36, def.name, def.color, true, { ability: true });
       P.crossoverLabelT = G.t + 2.4;
     }
     // Apuntado manual (opción del menú): rayos y proyectiles van hacia donde apunta el jugador;
@@ -1327,7 +1336,7 @@ function fireAttacks(P, dt) {
         P.dashColor = def.color; P.inv = Math.max(P.inv, dashDur + 0.1);
       }
       P.punchT = 0.3;
-      addText(P.x, P.y - 34, def.name, def.color, true);
+      addText(P.x, P.y - 34, def.name, def.color, true, { ability: true });
       sfx('hit', 0.25);
     } else if (def.kick) {   // Dynamite Kick: patada voladora... o se cae de cara
       if (Math.random() < s.trip) {
@@ -1786,7 +1795,7 @@ function blind(secs) {
 }
 function drawBlind() {
   if (!(G.blind > 0)) return;
-  ctx.save(); ctx.globalAlpha = Math.min(0.95, G.blind / 1.6 * 1.1); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H); ctx.restore();
+  ctx.save(); ctx.globalAlpha = Math.min(0.95, G.blind / 1.6 * 1.1) * SAVE.fx.flash; ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H); ctx.restore();
 }
 // Velocidad del jugador según los efectos de los jefes: petrificado, caramelo, gravedad
 function statusSpeed(P) {
@@ -2744,6 +2753,12 @@ function syncPauseOptions() {
   const vm = Math.round(AudioVolume.music * 100), vs = Math.round(AudioVolume.sfx * 100);
   $('volMusic').value = vm; $('volMusicVal').textContent = `${vm}%`;
   $('volSfx').value = vs; $('volSfxVal').textContent = `${vs}%`;
+  const fp = Math.round(SAVE.fx.particles * 100), fsh = Math.round(SAVE.fx.shake * 100), ff = Math.round(SAVE.fx.flash * 100);
+  $('fxParticles').value = fp; $('fxParticlesVal').textContent = `${fp}%`;
+  $('fxShake').value = fsh; $('fxShakeVal').textContent = `${fsh}%`;
+  $('fxFlash').value = ff; $('fxFlashVal').textContent = `${ff}%`;
+  $('fxDmgNumbers').checked = SAVE.fx.dmgNumbers;
+  $('fxAbilityNames').checked = SAVE.fx.abilityNames;
 }
 $('volMusic').oninput = e => {
   const v = +e.target.value; $('volMusicVal').textContent = `${v}%`;
@@ -2755,6 +2770,13 @@ $('volSfx').oninput = e => {
   SFX.setVolume(v / 100);
   if (v > 0 && !SFX.enabled) toggleSfx();
 };
+// Accesibilidad: puramente visual y local a este jugador (ver localBurst, drawVignette, drawBlind, drawTexts) -
+// nunca cambia lo que la partida realmente hace ni lo que ven los demás jugadores.
+$('fxParticles').oninput = e => { const v = +e.target.value; $('fxParticlesVal').textContent = `${v}%`; SAVE.fx.particles = v / 100; writeSave(); };
+$('fxShake').oninput = e => { const v = +e.target.value; $('fxShakeVal').textContent = `${v}%`; SAVE.fx.shake = v / 100; writeSave(); };
+$('fxFlash').oninput = e => { const v = +e.target.value; $('fxFlashVal').textContent = `${v}%`; SAVE.fx.flash = v / 100; writeSave(); };
+$('fxDmgNumbers').onchange = e => { SAVE.fx.dmgNumbers = e.target.checked; writeSave(); };
+$('fxAbilityNames').onchange = e => { SAVE.fx.abilityNames = e.target.checked; writeSave(); };
 
 // ─── Pantalla de pausa: estadísticas y mapa ─────────────────────────────────
 const esc = s => String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
@@ -4013,7 +4035,7 @@ function allyPass(c, list, draw) {
 }
 function renderWorldView(V) {
   const t = G.t, c = bctx;
-  const sh = G.shake > 0 && G.mode === 'play' ? G.shake * 7 : 0;   // en la pausa o eligiendo mejora no tiembla
+  const sh = G.shake > 0 && G.mode === 'play' ? G.shake * 7 * SAVE.fx.shake : 0;   // en la pausa o eligiendo mejora no tiembla
   beginWorld(V.x, V.y, Math.round(rand(-sh, sh)), Math.round(rand(-sh, sh)));
   const props = drawGround(c, camX, camY, BW, BH);
   if (G.snake) snakeDrawWorld(c, t);   // Camino de la Serpiente: puntos de control, nubes Kinton, fantasma
@@ -4653,11 +4675,13 @@ function drawVignette(tint) {
   const M = G.me, hp = M.hp / M.maxHp;
   if (!M.dead && hp < 0.3) { ctx.globalAlpha = (0.3 - hp) * (0.8 + Math.sin(G.t * 8) * 0.3); ctx.fillStyle = '#c00018'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
   if (M.dead) { ctx.globalAlpha = 0.35; ctx.fillStyle = '#1a0a20'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
-  if (G.flashT > 0) { ctx.globalAlpha = Math.min(0.55, G.flashT); ctx.fillStyle = '#fff6d8'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }   // jefe derrotado
+  if (G.flashT > 0) { ctx.globalAlpha = Math.min(0.55, G.flashT) * SAVE.fx.flash; ctx.fillStyle = '#fff6d8'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }   // jefe derrotado
 }
 function drawTexts() {
   ctx.textAlign = 'center'; ctx.lineJoin = 'round';
   for (const tx of G.texts) {
+    if (tx.params && tx.params.dmg && !SAVE.fx.dmgNumbers) continue;   // per-viewer toggle, see damageEnemy()
+    if (tx.params && tx.params.ability && !SAVE.fx.abilityNames) continue;   // per-viewer toggle, see fireAttacks()
     const pop = tx.big === 2 ? 1 + Math.max(0, tx.t - 0.55) * 4 : 1;   // los críticos aparecen grandes y se acomodan
     ctx.font = `700 ${Math.round((tx.big === 2 ? 22 : tx.big ? 20 : 14) * pop)}px ${FONT}`;
     ctx.globalAlpha = Math.min(1, tx.t * 3);
