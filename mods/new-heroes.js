@@ -34,6 +34,11 @@ Object.assign(ATTACKS, {
     desc: 'Moves faster than the eye can track, striking every enemy on screen in one motion.',
     stats: () => ({ cd: 9, dur: 1.4, count: 3, taunt: 260, dmg: 60, explode: 95 }),
   },
+  godspeedstrike: {
+    name: 'Godspeed Strike', color: '#8ff2ff', core: '#eafffe', type: 'rush', users: ['killua'], crossover: true,
+    desc: 'Killua crosses the distance faster than the eye can follow and delivers a single lightning-charged blow.',
+    stats: l => ({ cd: 1.05 - l * 0.055, dmg: 13 + l * 5, count: 2 + Math.floor(l / 2), speed: 13.5, r: 14 + l * 0.6, knock: 8 }),
+  },
 
   // ── Asta ─────────────────────────────────────────────────────────────────
   antimagicslash: {
@@ -82,6 +87,11 @@ Object.assign(ATTACKS, {
     desc: "A God of Destruction's true power, unleashed without restraint across the whole battlefield.",
     stats: () => ({ cd: 9, dmg: 100, radius: 160, count: 1, stun: 0.45 }),
   },
+  instantjudgment: {
+    name: 'Instant Judgment', color: '#b06cff', core: '#f2e6ff', type: 'rush', users: ['beerus'], crossover: true,
+    desc: "Beerus vanishes and reappears behind his target for a single contemptuous, world-ending backhand.",
+    stats: l => ({ cd: 1.85 - l * 0.09, dmg: 22 + l * 8, count: 1 + Math.floor(l / 3), speed: 14, r: 17 + l * 0.7, knock: 14 }),
+  },
 
   // ── Yoshiyuki Taira (Beck) ───────────────────────────────────────────────
   soundwaveslash: {
@@ -105,6 +115,11 @@ Object.assign(ATTACKS, {
     name: 'Encore Finale', color: '#ffd93b', type: 'nova', users: ['taira'], crossover: true, ultimate: true,
     desc: 'One last song, played loud enough to level the crowd.',
     stats: () => ({ cd: 9, dmg: 85, radius: 150, count: 1, stun: 0.4 }),
+  },
+  stagedive: {
+    name: 'Stage Dive', color: '#ff7a3d', core: '#ffe0b3', type: 'rush', users: ['taira'], crossover: true,
+    desc: 'Taira leaps off an imaginary stack of amps and crowd-surfs straight through the horde.',
+    stats: l => ({ cd: 1.7 - l * 0.08, dmg: 14 + l * 5.5, count: 2 + Math.floor(l / 2), speed: 9.8, r: 15 + l * 0.6, knock: 9 }),
   },
 });
 

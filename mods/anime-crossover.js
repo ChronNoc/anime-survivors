@@ -27,6 +27,11 @@ Object.assign(ATTACKS, {
     stats: l => ({ cd: 2.75 - l * 0.16, dmg: 18 + l * 8, count: 2 + Math.floor(l / 2), speed: 9.4,
       r: 7 + l * 0.5, pierce: 1, life: 1.05, spread: 0.34, knock: 14 }),
   },
+  uzumakibarrage: {
+    name: 'Uzumaki Barrage', color: '#ffb84f', core: '#fff1a6', type: 'rush', users: ['naruto'], crossover: true,
+    desc: 'Naruto closes in with a full melee combo, launching everyone caught in his path.',
+    stats: l => ({ cd: 1.55 - l * 0.08, dmg: 15 + l * 5.5, count: 2 + Math.floor(l / 2), speed: 11, r: 15 + l * 0.6, knock: 11 }),
+  },
 
   gumpistol: {
     name: 'Gum-Gum Pistol', color: '#f2b28f', core: '#fff0de', type: 'projectile', kind: 'rubberfist', users: ['luffy'], crossover: true,
@@ -51,6 +56,11 @@ Object.assign(ATTACKS, {
     desc: 'An enormous hardened fist crushes everything in its path before exploding outward.',
     stats: l => ({ cd: 6.0 - l * 0.36, dmg: 62 + l * 23, count: 1, speed: 3.8, r: 20 + l * 1.8,
       pierce: 2, life: 3.1, spread: 0, explode: 68 + l * 12, knock: 24 }),
+  },
+  redroc: {
+    name: 'Gum-Gum Red Roc', color: '#ff5b32', core: '#ffe59b', type: 'rush', users: ['luffy'], crossover: true,
+    desc: 'Luffy coats his leg in armament haki and dives feet-first through the enemy line.',
+    stats: l => ({ cd: 1.65 - l * 0.08, dmg: 17 + l * 6.5, count: 2 + Math.floor(l / 2), speed: 11.5, r: 16 + l * 0.6, knock: 12 }),
   },
 
   monarchdagger: {
