@@ -106,6 +106,17 @@ html, body { overscroll-behavior: none; }
   .setup-col { overflow-y: visible; }
   #setup { overflow-y: auto; }
 }
+
+/* ── Controles: remapeo de teclas ────────────────────────────────────────── */
+.controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; width: min(480px, 100%); }
+.controls-col h3 { color: var(--gold); font-size: 15px; margin-bottom: 6px; }
+.key-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 3px 0; font-size: 13px; }
+.key-btn { min-width: 108px; padding: 6px 10px; border: 2px solid rgba(155, 184, 255, .4); border-radius: 7px;
+  background: rgba(10, 15, 46, .6); color: #fff; font: inherit; font-size: 12px; cursor: pointer; }
+.key-btn:hover { border-color: var(--gold); }
+.key-btn.listening { border-color: #6cff7a; color: #6cff7a; }
+.key-btn.fixed { opacity: .65; cursor: default; }
+.controls-conflict { color: #ff8a8a; }
 @media (max-width: 640px) {
   .screen { padding: 8px; }
   .menu-box, .box { padding: 12px 10px; }

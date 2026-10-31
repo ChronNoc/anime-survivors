@@ -47,12 +47,19 @@ async function sha256(text) {
 
 // ─── Guardado ────────────────────────────────────────────────────────────────
 const SAVE_KEY = 'dbzsurvivor.save.v1';
+// Remappable keys (movement for both players, Ki for Player 1 only - see keymap note in loadSave()).
+const DEFAULT_KEYMAP = { p1Up: 'KeyW', p1Down: 'KeyS', p1Left: 'KeyA', p1Right: 'KeyD', p1Ki: 'Space',
+  p2Up: 'ArrowUp', p2Down: 'ArrowDown', p2Left: 'ArrowLeft', p2Right: 'ArrowRight' };
 function loadSave() {
   const def = { best: {}, zeni: 0, runs: 0, wins: 0, name: '', char: 'goku', upgrades: {}, unlocked: {}, vegetaKills: 0, ach: {}, stats: {},
     level: 'saiyan', levelsWon: {},
     // Accessibility/quality options: 0-1 multipliers for particle count, camera shake and flash
     // brightness, plus toggles for damage numbers and the big ability-name callouts.
-    fx: { particles: 1, shake: 1, flash: 1, dmgNumbers: true, abilityNames: true } };
+    fx: { particles: 1, shake: 1, flash: 1, dmgNumbers: true, abilityNames: true },
+    // Remappable movement (both players) and Player 1's Ki key (added to, not replacing, the
+    // existing Space/Shift/E/K alternates - see P1_KI_KEYS). Player 2's Ki key is deliberately NOT
+    // remappable here: it must always stay Right Ctrl, per an explicit project requirement.
+    keymap: Object.assign({}, DEFAULT_KEYMAP) };
   let s;
   try { s = Object.assign(def, JSON.parse(localStorage.getItem(SAVE_KEY)) || {}); } catch (e) { s = def; }
   // Estadísticas acumuladas para los logros (bajas totales, victorias por guerrero, evoluciones vistas)
@@ -64,6 +71,7 @@ function loadSave() {
     // Perfil (2.22.0): partidas y segundos por guerrero, quién te derrotó (id del jefe, o "horde"), daño total por técnica
     charRuns: {}, charTime: {}, killedBy: {}, techDmg: {} }, s.stats);
   s.fx = Object.assign({ particles: 1, shake: 1, flash: 1, dmgNumbers: true, abilityNames: true }, s.fx);
+  s.keymap = Object.assign({}, DEFAULT_KEYMAP, s.keymap);
   // La mejora «Técnica secreta» (1500 Zeni) se reemplazó: se devuelve lo que costó
   if (s.upgrades && s.upgrades.moves) { s.zeni += 1500; delete s.upgrades.moves; s.refundedMoves = true; }
   return s;
@@ -319,7 +327,7 @@ addEventListener('keydown', e => {
   if (!G) { if (e.code === 'Escape') closeMenuSection(); return; }
   if (TEST_MODE && e.code === 'Escape' && testPowersOpen()) { toggleTestPowers(false); return; }   // panel de Poderes
   if (TEST_MODE && testKey(e)) return;
-  if (KI_KEYS.has(e.code)) {
+  if (KI_KEYS.has(e.code) || e.code === SAVE.keymap.p1Ki) {
     if (!e.repeat) {
       const target = G.localCoop && P2_KI_KEYS.has(e.code) ? G.players[1] : G.me;
       requestTransform(target);
@@ -394,23 +402,25 @@ function inputVec(P = G && G.me) {
     if (d > 8) { const m = Math.min(1, d / 50); return { x: dx / d * m, y: dy / d * m }; }
   }
   let x = 0, y = 0;
+  const km = SAVE.keymap;
   if (G && G.localCoop) {
     if (second) {
-      if (keys.ArrowUp) y--;
-      if (keys.ArrowDown) y++;
-      if (keys.ArrowLeft) x--;
-      if (keys.ArrowRight) x++;
+      if (keys[km.p2Up]) y--;
+      if (keys[km.p2Down]) y++;
+      if (keys[km.p2Left]) x--;
+      if (keys[km.p2Right]) x++;
     } else {
-      if (keys.KeyW) y--;
-      if (keys.KeyS) y++;
-      if (keys.KeyA) x--;
-      if (keys.KeyD) x++;
+      if (keys[km.p1Up]) y--;
+      if (keys[km.p1Down]) y++;
+      if (keys[km.p1Left]) x--;
+      if (keys[km.p1Right]) x++;
     }
   } else {
-    if (keys.KeyW || keys.ArrowUp) y--;
-    if (keys.KeyS || keys.ArrowDown) y++;
-    if (keys.KeyA || keys.ArrowLeft) x--;
-    if (keys.KeyD || keys.ArrowRight) x++;
+    // Solo: either player's whole remapped set works, same as the original WASD-or-arrows behavior
+    if (keys[km.p1Up] || keys[km.p2Up]) y--;
+    if (keys[km.p1Down] || keys[km.p2Down]) y++;
+    if (keys[km.p1Left] || keys[km.p2Left]) x--;
+    if (keys[km.p1Right] || keys[km.p2Right]) x++;
   }
   const d = Math.hypot(x, y);
   return d ? { x: x / d, y: y / d } : { x: 0, y: 0 };
@@ -5751,7 +5761,7 @@ for (const a of document.querySelectorAll('.author-link')) {
 }
 // Secciones del menú: además del botón de abajo, uno arriba a la izquierda ("Volver (ESC)") y la tecla Escape
 const MENU_SECTIONS = { setup: 'btnSetupBack', help: 'btnHelpBack', techs: 'btnTechsBack', achs: 'btnAchsBack', profile: 'btnProfileBack', rank: 'btnRankBack',
-  news: 'btnNewsBack', credits: 'btnCreditsBack', shop: 'btnShopBack' };
+  news: 'btnNewsBack', credits: 'btnCreditsBack', shop: 'btnShopBack', controls: 'btnControlsBack' };
 for (const [id, back] of Object.entries(MENU_SECTIONS)) {
   const b = document.createElement('button');
   b.className = 'btn ghost small back-top';
@@ -5765,6 +5775,53 @@ function closeMenuSection() {
 }
 $('btnCredits').onclick = () => { $('menu').classList.add('hidden'); $('credits').classList.remove('hidden'); };
 $('btnCreditsBack').onclick = () => { $('credits').classList.add('hidden'); $('menu').classList.remove('hidden'); };
+
+// ─── Remapeo de teclas ────────────────────────────────────────────────────
+// Etiqueta legible para un KeyboardEvent.code (lo que ve el jugador en el botón)
+const KEY_LABELS = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Space: 'Space',
+  ControlRight: 'Right Ctrl', ControlLeft: 'Left Ctrl', ShiftLeft: 'Shift', ShiftRight: 'Shift' };
+function keyLabel(code) {
+  if (!code) return '—';
+  if (KEY_LABELS[code]) return KEY_LABELS[code];
+  if (code.startsWith('Key')) return code.slice(3);
+  if (code.startsWith('Digit')) return code.slice(5);
+  return code;
+}
+let listeningAction = null;
+function renderControls() {
+  for (const btn of $('controls').querySelectorAll('.key-btn[data-action]')) {
+    const action = btn.dataset.action;
+    btn.textContent = listeningAction === action ? t('Pulsa una tecla...') : keyLabel(SAVE.keymap[action]);
+    btn.classList.toggle('listening', listeningAction === action);
+  }
+  $('controlsConflict').classList.add('hidden');
+}
+function startListening(action) {
+  listeningAction = action;
+  renderControls();
+}
+addEventListener('keydown', e => {
+  if (!listeningAction) return;
+  e.preventDefault(); e.stopPropagation();
+  if (e.code === 'Escape') { listeningAction = null; renderControls(); return; }
+  // Conflicto: esa tecla ya la usa otra acción (incluido el Ki fijo del Jugador 2, Ctrl derecho)
+  const taken = Object.entries(SAVE.keymap).find(([k, v]) => k !== listeningAction && v === e.code);
+  if (e.code === 'ControlRight' || taken) {
+    const label = e.code === 'ControlRight' ? t('el Ki del Jugador 2') : t(CONTROL_NAMES[taken[0]]);
+    $('controlsConflict').textContent = t('{key} ya se usa para {action}', { key: keyLabel(e.code), action: label });
+    $('controlsConflict').classList.remove('hidden');
+    return;
+  }
+  SAVE.keymap[listeningAction] = e.code; writeSave();
+  listeningAction = null;
+  renderControls();
+}, true);   // captura: antes que cualquier otro atajo (N, B, M, Ki...) mientras se está remapeando
+const CONTROL_NAMES = { p1Up: 'Jugador 1: Arriba', p1Down: 'Jugador 1: Abajo', p1Left: 'Jugador 1: Izquierda', p1Right: 'Jugador 1: Derecha', p1Ki: 'Jugador 1: Ki',
+  p2Up: 'Jugador 2: Arriba', p2Down: 'Jugador 2: Abajo', p2Left: 'Jugador 2: Izquierda', p2Right: 'Jugador 2: Derecha' };
+for (const btn of $('controls').querySelectorAll('.key-btn[data-action]')) btn.onclick = () => startListening(btn.dataset.action);
+$('btnControls').onclick = () => { listeningAction = null; renderControls(); $('menu').classList.add('hidden'); $('controls').classList.remove('hidden'); };
+$('btnControlsBack').onclick = () => { listeningAction = null; $('controls').classList.add('hidden'); $('menu').classList.remove('hidden'); };
+$('btnControlsReset').onclick = () => { SAVE.keymap = Object.assign({}, DEFAULT_KEYMAP); writeSave(); listeningAction = null; renderControls(); };
 $('btnShopBack').onclick = () => { $('shop').classList.add('hidden'); buildMenu(); $('menu').classList.remove('hidden'); };
 $('waveShopGo').onclick = () => requestReadyWaveShop();
 

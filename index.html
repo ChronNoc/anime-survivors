@@ -81,6 +81,7 @@
           <button id="btnAchs" class="btn ghost">Logros</button>
           <button id="btnRank" class="btn ghost">Ranking</button>
           <button id="btnHelp" class="btn ghost">Cómo jugar</button>
+          <button id="btnControls" class="btn ghost">Controles</button>
         </div>
       </div>
       <p class="hint">Solo: WASD / flechas para moverte · Espacio, Shift o E para el poder del Ki<br>Co-op local: J1 usa WASD + Espacio/E · J2 usa flechas + Ctrl derecho · M mapa · N música · B sonidos · P pausa</p>
@@ -152,6 +153,38 @@
       <h2>Cómo jugar</h2>
       <div id="helpContent" class="help-content"></div>
       <button id="btnHelpBack" class="btn ghost">Volver</button>
+    </div>
+  </div>
+
+  <!-- Remapeo de teclas: movimiento de los dos jugadores y el Ki del Jugador 1 (el Ki del Jugador 2
+       siempre es Ctrl derecho - a propósito, no se puede cambiar) -->
+  <div id="controls" class="screen overlay hidden">
+    <div class="box help-box">
+      <h2>Controles</h2>
+      <p class="hint">Haz clic en una tecla y presiona la nueva para cambiarla.</p>
+      <div class="controls-grid">
+        <div class="controls-col">
+          <h3>Jugador 1</h3>
+          <div class="key-row"><span>Arriba</span><button class="key-btn" data-action="p1Up"></button></div>
+          <div class="key-row"><span>Abajo</span><button class="key-btn" data-action="p1Down"></button></div>
+          <div class="key-row"><span>Izquierda</span><button class="key-btn" data-action="p1Left"></button></div>
+          <div class="key-row"><span>Derecha</span><button class="key-btn" data-action="p1Right"></button></div>
+          <div class="key-row"><span>Ki</span><button class="key-btn" data-action="p1Ki"></button></div>
+        </div>
+        <div class="controls-col">
+          <h3>Jugador 2</h3>
+          <div class="key-row"><span>Arriba</span><button class="key-btn" data-action="p2Up"></button></div>
+          <div class="key-row"><span>Abajo</span><button class="key-btn" data-action="p2Down"></button></div>
+          <div class="key-row"><span>Izquierda</span><button class="key-btn" data-action="p2Left"></button></div>
+          <div class="key-row"><span>Derecha</span><button class="key-btn" data-action="p2Right"></button></div>
+          <div class="key-row"><span>Ki</span><button class="key-btn fixed" disabled>Ctrl derecho</button></div>
+        </div>
+      </div>
+      <p id="controlsConflict" class="hint controls-conflict hidden"></p>
+      <div class="pause-actions">
+        <button id="btnControlsReset" class="btn ghost">Restablecer</button>
+        <button id="btnControlsBack" class="btn ghost">Volver</button>
+      </div>
     </div>
   </div>
 
