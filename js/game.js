@@ -488,6 +488,9 @@ function newGame(roster, net = null, myId = 0, speed = 1, level = 'saiyan', loca
     // Shared co-op ultimate meter: fills from damage dealt by either living, non-ally player; only
     // relevant with 2+ such players (see TEAM_ULT_MAX / teamUltActive() / triggerTeamUltimate()).
     teamUlt: 0,
+    // Destructible scenery: crates/rocks that spawn near the player and break for a small reward
+    // (see updateBreakProps/spawnBreakProp below).
+    breakProps: [], nextBreakProp: 8,
   };
   G.bosses = bossSchedule(G.lv, weekly);
   G.practice = !!weekly && !useWeeklyTry();   // sin intentos hoy: partida de práctica (no entra al ranking)
@@ -2200,10 +2203,12 @@ function tickLanes(dt) {
 function updatePickups(k) {
   if (!alivePlayers().length) return;
   for (const p of G.pickups) {
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) { p.dead = true; continue; }   // objeto corrupto (sin posición válida): se descarta en vez de romper el bucle
     if (p.kind === 'senzu' && !p.pulled && p.born !== undefined && G.t - p.born > SENZU_LIFE) { p.dead = true; continue; }   // se echó a perder sin que nadie la agarrara
     // Las gemas atraídas por la Cápsula de Bulma van hacia quien la recogió, acelerando de a poco
     const owner = p.to !== undefined && G.players.find(o => o.id === p.to && !o.dead && !o.gone && !o.hidden);
     const P = owner || nearestPlayer(p.x, p.y);
+    if (!P) continue;
     const dx = P.x - p.x, dy = P.y - p.y, d = Math.hypot(dx, dy) || 1;
     if (!p.pulled && d < (p.kind === 'xp' || p.kind === 'money' ? magnetRange(P) : 40)) p.pulled = true;
     if (p.pulled) {   // nunca avanzan más de lo que les falta, para no pasarse de largo
@@ -3599,6 +3604,8 @@ function update(dt) {
   updateNovas(dt);
   updateEnemies(k, dt);
   updateShots(k, dt);
+  updateBreakProps(dt);
+  if (!G.snake && (G.nextBreakProp -= dt) <= 0) { G.nextBreakProp = rand(14, 24); spawnBreakProp(); }
   updatePickups(k);
   if (G.snake) snakeUpdate(dt);
 
@@ -3692,6 +3699,61 @@ function finishWaveShop() {
   announce('¡Oleada {n}!', '#8fd8ff', { n: G.wave });
 }
 const waveShopCost = (item, lvl) => Math.round(item.cost * Math.pow(1.22, lvl));
+// ─── Escenario destructible: cajones/rocas que sueltan una pequeña recompensa al romperse ──────
+const BREAK_PROP_TYPES = [
+  { id: 'crate', hp: 24, color: '#8a5a2a', dark: '#5a3a1a' },
+  { id: 'rock', hp: 40, color: '#8a8a8a', dark: '#5a5a5a' },
+];
+function spawnBreakProp() {
+  if (G.breakProps.length >= 10) return;
+  const P = pick(alivePlayers()); if (!P) return;
+  const [x, y] = walkableSpot(P.x + rand(-260, 260), P.y + rand(-260, 260));
+  if (Math.hypot(x - P.x, y - P.y) < 80) return;   // no aparece encima del jugador
+  const type = pick(BREAK_PROP_TYPES);
+  G.breakProps.push({ id: ++G.nid, type, x, y, hp: type.hp, maxHp: type.hp, hit: new Set(), flash: 0 });
+}
+function updateBreakProps(dt) {
+  if (!G.breakProps.length) return;
+  for (const b of G.breakProps) {
+    if (b.flash > 0) b.flash -= dt;
+    // Cualquier proyectil u onda del jugador que lo toque lo golpea una vez (igual que a un enemigo,
+    // pero sin crítico ni rebote: es escenario, no un combatiente)
+    for (const p of G.projs) {
+      if (p.hit.has(b) || Math.hypot(p.x - b.x, p.y - b.y) > p.r + 14) continue;
+      p.hit.add(b); b.hp -= p.dmg; b.flash = 0.1;
+      if (!(p.pierce > 0)) p.dead = true;
+    }
+    for (const n of G.novas) {
+      if (n.hit.has(b) || Math.hypot(n.x - b.x, n.y - b.y) > n.r + 14) continue;
+      n.hit.add(b); b.hp -= n.dmg; b.flash = 0.1;
+    }
+  }
+  for (const b of G.breakProps) if (b.hp <= 0 && !b.dead) {
+    b.dead = true;
+    burst(b.x, b.y, b.type.color, 14, 4, 3);
+    poof(b.x, b.y);
+    G.pickups.push({ kind: 'money', v: Math.round(rand(6, 14)), x: b.x, y: b.y, pulled: false, sp: 0 });
+    if (Math.random() < 0.12) G.pickups.push({ kind: 'senzu', x: b.x, y: b.y, pulled: false, sp: 0, born: G.t });
+  }
+  G.breakProps = G.breakProps.filter(b => !b.dead);
+}
+function drawBreakProps(c) {
+  for (const b of G.breakProps) {
+    const t = b.type, p = b.hp / b.maxHp, w = 20, h = 18;
+    c.fillStyle = 'rgba(40,20,10,0.25)'; c.beginPath(); c.ellipse(b.x, b.y + h / 2 - 1, w * 0.45, 4, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = b.flash > 0 ? '#ffffff' : t.dark;
+    c.fillRect(Math.round(b.x - w / 2), Math.round(b.y - h / 2), w, h);
+    c.fillStyle = b.flash > 0 ? '#ffffff' : t.color;
+    c.fillRect(Math.round(b.x - w / 2) + 2, Math.round(b.y - h / 2) + 2, w - 4, h - 4);
+    c.strokeStyle = t.dark; c.lineWidth = 1;
+    if (t.id === 'crate') {
+      c.beginPath(); c.moveTo(b.x - w / 2 + 2, b.y - h / 2 + 2); c.lineTo(b.x + w / 2 - 2, b.y + h / 2 - 2); c.moveTo(b.x + w / 2 - 2, b.y - h / 2 + 2); c.lineTo(b.x - w / 2 + 2, b.y + h / 2 - 2); c.stroke();
+    } else {
+      c.strokeRect(Math.round(b.x - w / 2) + 4, Math.round(b.y - h / 2) + 4, w - 8, h - 8);
+    }
+    if (p < 1) { c.fillStyle = 'rgba(10,15,46,0.7)'; c.fillRect(b.x - 11, b.y - h / 2 - 6, 22, 3); c.fillStyle = p > 0.4 ? '#6cff7a' : '#ff6a4d'; c.fillRect(b.x - 10, b.y - h / 2 - 5, Math.round(20 * p), 1); }
+  }
+}
 // Local co-op shares one screen: players buy one at a time, same turn-order pattern as choicePlayer().
 const waveShopPlayer = () => G && G.localCoop && G.waveShop
   ? (G.players.find(P => G.waveShop.waiting.has(P.id)) || G.me)
@@ -4108,6 +4170,7 @@ function renderWorldView(V) {
   const sh = G.shake > 0 && G.mode === 'play' ? G.shake * 7 * SAVE.fx.shake : 0;   // en la pausa o eligiendo mejora no tiembla
   beginWorld(V.x, V.y, Math.round(rand(-sh, sh)), Math.round(rand(-sh, sh)));
   const props = drawGround(c, camX, camY, BW, BH);
+  drawBreakProps(c);
   if (G.snake) snakeDrawWorld(c, t);   // Camino de la Serpiente: puntos de control, nubes Kinton, fantasma
 
   // Zonas de impacto telegrafiadas

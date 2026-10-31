@@ -91,6 +91,7 @@ const Net = (() => {
   const roomLevelOf = () => (levelDef(myLevel()).bonus ? 'saiyan' : myLevel());
   const PASSIVE_CODES = Object.keys(PASSIVES);
   const PICK_CODES = ['xp', 'senzu', 'ball', 'capsule'];
+  const BREAK_PROP_CODES = BREAK_PROP_TYPES.map(t => t.id);
   const r1 = v => Math.round(v);
   const r2 = v => Math.round(v * 100) / 100;
 
@@ -550,6 +551,7 @@ const Net = (() => {
       HB: G.helpers.map(h => [r1(h.x), r1(h.y), h.facing, r2(h.t), h.punch > 0 ? 1 : 0]),   // ¡Amigo Buu! (Mr. Satán)
       EB: G.ebeams.map(b => [r1(b.x), r1(b.y), r2(b.ang), b.len, b.width, r2(b.t), b.dur, b.color, b.core, r2(b.spin || 0)]),   // rayos de los jefes
       L: G.lanes.map(l => [r1(l.x), r1(l.y), r2(l.dx), r2(l.dy), r1(l.len), r1(l.w), r2(l.t), l.dur]),
+      BP: G.breakProps.map(b => [b.id, BREAK_PROP_CODES.indexOf(b.type.id), r1(b.x), r1(b.y), Math.max(0, Math.ceil(b.hp / b.maxHp * 100)), b.flash > 0 ? 1 : 0]),
       ev: G.out,
     };
     G.out = [];
@@ -676,6 +678,7 @@ const Net = (() => {
     G.helpers = (d.HB || []).map(q => ({ x: q[0], y: q[1], facing: q[2], t: q[3], punch: q[4] ? 0.2 : 0 }));
     G.ebeams = (d.EB || []).map(b => ({ x: b[0], y: b[1], ang: b[2], len: b[3], width: b[4], t: b[5], dur: b[6], color: b[7], core: b[8], spin: b[9] || 0 }));
     G.lanes = (d.L || []).map(l => ({ x: l[0], y: l[1], dx: l[2], dy: l[3], len: l[4], w: l[5], t: l[6], dur: l[7] }));
+    G.breakProps = (d.BP || []).map(b => ({ id: b[0], type: BREAK_PROP_TYPES[b[1]] || BREAK_PROP_TYPES[0], x: b[2], y: b[3], hp: b[4], maxHp: 100, hit: new Set(), flash: b[5] ? 0.1 : 0 }));
 
     for (const ev of d.ev) {
       if (ev[0] === 't') localText(ev[1], ev[2], ev[3], ev[4], ev[5] === 2 ? 2 : !!ev[5], ev[6] || null);   // 2: crítico
