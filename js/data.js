@@ -433,9 +433,17 @@ const ENEMIES = {
   bomber: { name: 'Bombardero', hp: 22, speed: 1.55, r: 11, dmg: 18, xp: 2, scale: 1, kamikaze: true, look: { style: 'bald', skin: '#6a4a3a', top: '#2f7a2f', pants: '#2f7a2f', boots: '#333' } },
   mercenary: { name: 'Mercenario', hp: 40, speed: 1.0, r: 12, dmg: 12, xp: 3, scale: 1, shooter: true, shootChance: 0.7, look: { style: 'bald', skin: '#c98a5a', top: '#5a3a2a', pants: '#5a3a2a', boots: '#333' } },
   cyborg: { name: 'Cíborg', hp: 70, speed: 1.0, r: 13, dmg: 14, xp: 4, scale: 1.05, deathRing: 5, look: { style: 'bald', skin: '#c98a5a', top: '#2f3a7a', pants: '#2f9a3a', boots: '#333' } },
+  // Nuevos roles (variedad de enemigos): escudo cíclico (inmune mientras el escudo está arriba),
+  // invocador (saca secuaces mientras viva) y apoyo (cura a los enemigos comunes cercanos).
+  shieldbot: { name: 'Robot escudado', hp: 55, speed: 0.7, r: 13, dmg: 10, xp: 4, scale: 1.05,
+    shieldCycle: { up: 2.5, down: 2 }, look: { style: 'bald', skin: '#c8c8d0', top: '#3a5fae', pants: '#3a5fae', boots: '#333' } },
   destroyer: { name: 'Destructor', hp: 160, speed: 0.65, r: 18, dmg: 18, xp: 9, scale: 1, stomp: 65, look: { style: 'bald', skin: '#c8c8d0', top: '#c03030', pants: '#c03030', boots: '#333' } },
   majin: { name: 'Guerrero Majin', hp: 95, speed: 0.85, r: 16, dmg: 14, xp: 6, scale: 1.2, ring: 6,
     look: { style: 'bald', skin: '#e8b88a', top: '#3a3a3a', pants: '#b23030', belt: '#222', boots: '#222', majin: true } },
+  summoner: { name: 'Hechicero de Babidi', hp: 50, speed: 0.75, r: 12, dmg: 6, xp: 5, scale: 1.05,
+    summons: { type: 'criminal', every: 6, count: 2 }, look: { style: 'bald', skin: '#9a5ab8', top: '#2a1a3a', pants: '#2a1a3a', boots: '#222' } },
+  healer: { name: 'Sanador Majin', hp: 40, speed: 0.9, r: 11, dmg: 4, xp: 4, scale: 1,
+    supportHeal: { every: 4, radius: 90, pct: 0.15 }, look: { style: 'bald', skin: '#e8a0d0', top: '#6a2a5a', pants: '#6a2a5a', boots: '#222' } },
 };
 
 
@@ -574,7 +582,8 @@ const LEVELS = [
   { id: 'cell', num: 3, desc: 'Los androides del Dr. Gero y Cell.', theme: 'rocky',
     hp: 1.7, dmg: 1.3, zeni: 1.6,
     spawns: [{ id: 'eggbot', from: 0, weight: 10 }, { id: 'scorpion', from: 0, weight: 7 },
-      { id: 'alligator', from: 120, weight: 5 }, { id: 'celljr', from: 480, weight: 8 }],
+      { id: 'alligator', from: 120, weight: 5 }, { id: 'celljr', from: 480, weight: 8 },
+      { id: 'shieldbot', from: 150, weight: 4 }],
     swarm: 'eggbot', swarmText: '¡Un escuadrón de robots del Dr. Gero os rodea!',
     bosses: [{ id: 'a19', at: 105, hp: 3000 }, { id: 'gero', at: 210, hp: 3800 },
       { id: 'a16', at: 300, hp: 4200 }, { id: 'a17', at: 300, hp: 3800 }, { id: 'a18', at: 300, hp: 3800 },
@@ -583,7 +592,8 @@ const LEVELS = [
     hp: 1.95, dmg: 1.3, zeni: 2,   // 2.10.2: era 2.2 / 1.5 (muy difícil)
     spawns: [{ id: 'criminal', from: 0, weight: 10 }, { id: 'msoldier', from: 0, weight: 8 },
       { id: 'bomber', from: 60, weight: 5 }, { id: 'mercenary', from: 120, weight: 5 }, { id: 'majin', from: 180, weight: 6 },
-      { id: 'cyborg', from: 270, weight: 5 }, { id: 'destroyer', from: 420, weight: 2 }],
+      { id: 'cyborg', from: 270, weight: 5 }, { id: 'destroyer', from: 420, weight: 2 },
+      { id: 'summoner', from: 90, weight: 3 }, { id: 'healer', from: 150, weight: 4 }],
     swarm: 'msoldier', swarmText: '¡Los soldados de Babidi os rodean!',
     bosses: [{ id: 'puipui', at: 120, hp: 4000 }, { id: 'dabura', at: 270, hp: 7500 },
       { id: 'fatbuu', at: 420, hp: 13000 }, { id: 'buu', at: 600, hp: 20000, final: true }] },

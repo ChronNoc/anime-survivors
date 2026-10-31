@@ -2064,6 +2064,41 @@ function updateEnemies(k, dt) {
       e.dead = true;
       continue;
     }
+    // Guardián escudado: el escudo (ya usado por el jefe Androide 17, ver damageEnemy) sube y baja en
+    // ciclos - inmune mientras está arriba, para que golpearlo a destiempo se sienta como un error del
+    // jugador y no una pared de vida sin más.
+    if (e.def.shieldCycle && !e.boss) {
+      e.shieldT = (e.shieldT ?? e.def.shieldCycle.up) - dt;
+      if (e.shieldT <= 0) {
+        e.shield = e.shield > 0 ? 0 : 1;   // alterna: de escudo arriba a abajo y viceversa
+        e.shieldT = e.shield > 0 ? e.def.shieldCycle.up : e.def.shieldCycle.down;
+      }
+    }
+    // Invocador: cada tanto saca un par de secuaces débiles cerca suyo, mientras siga vivo
+    if (e.def.summons && !e.boss) {
+      e.summonCd = (e.summonCd ?? rand(e.def.summons.every * 0.5, e.def.summons.every)) - dt;
+      if (e.summonCd <= 0 && G.enemies.length < 220) {
+        e.summonCd = e.def.summons.every;
+        for (let i = 0; i < e.def.summons.count; i++) {
+          const a = Math.random() * Math.PI * 2;
+          spawnEnemy(e.def.summons.type, { pos: { x: e.x + Math.cos(a) * 22, y: e.y + Math.sin(a) * 22 } });
+        }
+        burst(e.x, e.y, '#b878ff', 10, 3, 2);
+      }
+    }
+    // Apoyo: cura a los enemigos comunes (no jefes) que tenga cerca, cada tanto
+    if (e.def.supportHeal && !e.boss) {
+      e.supportCd = (e.supportCd ?? e.def.supportHeal.every) - dt;
+      if (e.supportCd <= 0) {
+        e.supportCd = e.def.supportHeal.every;
+        let healed = false;
+        for (const o of G.enemies) {
+          if (o === e || o.dead || o.boss || (o.x - e.x) ** 2 + (o.y - e.y) ** 2 > e.def.supportHeal.radius ** 2) continue;
+          if (o.hp < o.maxHp) { o.hp = Math.min(o.maxHp, o.hp + o.maxHp * e.def.supportHeal.pct); healed = true; }
+        }
+        if (healed) ring(e.x, e.y, e.def.supportHeal.radius, 0.4, '#6cff7a');
+      }
+    }
     if (!stunned) for (const Q of alive) if ((Q.x - e.x) ** 2 + (Q.y - e.y) ** 2 < (e.r + Q.r) ** 2) {
       const before = Q.hp;
       hurtPlayer(Q, e.dmg);
